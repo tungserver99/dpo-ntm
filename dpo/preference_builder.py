@@ -178,10 +178,10 @@ def _build_preferences(
             "type": "object",
             "properties": {
                 "k": {"type": "integer"},
-                "w_plus_indices": {"type": "array", "items": {"type": "integer"}},
-                "w_minus_indices": {"type": "array", "items": {"type": "integer"}},
+                "w_win_indices": {"type": "array", "items": {"type": "integer"}},
+                "w_loose_indices": {"type": "array", "items": {"type": "integer"}},
             },
-            "required": ["k", "w_plus_indices", "w_minus_indices"],
+            "required": ["k", "w_win_indices", "w_loose_indices"],
         },
     }
     system = "You are a topic preference labeling assistant."
@@ -200,6 +200,8 @@ def _build_preferences(
 
         user = (
             "Identify win/lose word indices for the topic.\n"
+            "IMPORTANT: The indices you return must be the vocabulary indices provided in the word:index pairs below.\n"
+            "Do NOT use the position in the list. Only use the numeric values shown after each word.\n"
             "Goal: keep good words in top-15, remove bad words in top-15, and promote good words outside top-15.\n"
             "Definition:\n"
             "- Good (win): semantically central and clearly related to the topic description.\n"
@@ -210,6 +212,7 @@ def _build_preferences(
             "good words in top-15 like 'cpu','motherboard' should be win; "
             "bad words inside top-15 like 'sale','discount','today' should be lose; "
             "good words outside top-15 (e.g., 'chipset') should be win.\n"
+            "Index example: if you see [{'cpu': 120}, {'gpu': 450}], then valid indices are 120 and 450 (not 0 or 1).\n"
             "Rules:\n"
             "1) Any bad words in top15 must be in lose list.\n"
             "2) Any good words outside top15 must be in win list.\n"
@@ -225,9 +228,9 @@ def _build_preferences(
             res["k"] = k
 
         allowed = {d[list(d.keys())[0]] for d in top15_kv + other_kv}
-        w_plus = [int(i) for i in res["w_plus_indices"] if int(i) in allowed]
-        w_minus = [int(i) for i in res["w_minus_indices"] if int(i) in allowed]
-        prefs[k] = {"w_plus": w_plus, "w_minus": w_minus}
+        w_win = [int(i) for i in res["w_win_indices"] if int(i) in allowed]
+        w_loose = [int(i) for i in res["w_loose_indices"] if int(i) in allowed]
+        prefs[k] = {"w_win": w_win, "w_loose": w_loose}
 
     return prefs
 
@@ -306,13 +309,22 @@ def build_preference_pipeline(
     prefs_path = os.path.join(run_dir, "preferences.jsonl")
     if resume and os.path.isfile(prefs_path):
         prefs_list = read_jsonl(prefs_path)
-        prefs = {int(x["k"]): {"w_plus": x["w_plus_indices"], "w_minus": x["w_minus_indices"]} for x in prefs_list}
+        prefs = {}
+        for x in prefs_list:
+            k = int(x["k"])
+            if "w_win_indices" in x and "w_loose_indices" in x:
+                prefs[k] = {"w_win": x["w_win_indices"], "w_loose": x["w_loose_indices"]}
+            else:
+                prefs[k] = {
+                    "w_win": x.get("w_plus_indices", []),
+                    "w_loose": x.get("w_minus_indices", []),
+                }
     else:
         prefs = _build_preferences(llm, vocab, top_words_15, top_words_25, extra_words, descriptions)
         write_jsonl(
             prefs_path,
             [
-                {"k": k, "w_plus_indices": v["w_plus"], "w_minus_indices": v["w_minus"]}
+                {"k": k, "w_win_indices": v["w_win"], "w_loose_indices": v["w_loose"]}
                 for k, v in prefs.items()
             ],
         )

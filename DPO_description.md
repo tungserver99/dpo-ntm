@@ -49,8 +49,8 @@ For **top-10, top-15, top-20, and top-25**, save a separate JSONL file in the sa
 ```json
 {
   "k": <topic_index>,
-  "w_plus_indices": [<indices of words related to the main topic>],
-  "w_minus_indices": [<indices of words not related to the main topic>]
+  "w_win_indices": [<indices of words related to the main topic>],
+  "w_loose_indices": [<indices of words not related to the main topic>]
 }
 ```
 

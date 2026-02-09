@@ -24,6 +24,7 @@ class BasicTrainer:
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.lr_scheduler = lr_scheduler
+        self._lr_scheduler = None
         self.lr_step_size = lr_step_size
         self.log_interval = log_interval
         self.device = device
@@ -78,7 +79,7 @@ class BasicTrainer:
         if self.lr_scheduler:
             print("===>using lr_scheduler")
             self.logger.info("===>using lr_scheduler")
-            lr_scheduler = self.make_lr_scheduler(optimizer)
+            self._lr_scheduler = self.make_lr_scheduler(optimizer)
 
         data_size = len(dataset_handler.train_dataloader.dataset)
 
@@ -120,8 +121,8 @@ class BasicTrainer:
             # for key in loss_rst_dict:
                 # wandb.log({key: loss_rst_dict[key] / data_size})
             
-            if self.lr_scheduler:
-                lr_scheduler.step()
+            if self._lr_scheduler:
+                self._lr_scheduler.step()
 
             if verbose and epoch % self.log_interval == 0:
                 output_log = f'Epoch: {epoch:03d}'
@@ -142,7 +143,7 @@ class BasicTrainer:
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
-            'lr_scheduler_state_dict': self.lr_scheduler.state_dict()
+            'lr_scheduler_state_dict': self._lr_scheduler.state_dict() if self._lr_scheduler else None
         }
         
         checkpoint_path = os.path.join(self.checkpoint_dir, f'checkpoint_epoch_{epoch}.pth')
@@ -192,13 +193,20 @@ class BasicTrainer:
                 raise RuntimeError("preferences.jsonl not found while dpo_only_preferences is set.")
             from dpo.jsonl_io import read_jsonl
             prefs_list = read_jsonl(prefs_path)
+            prefs = {}
+            for x in prefs_list:
+                k = int(x["k"])
+                if "w_win_indices" in x and "w_loose_indices" in x:
+                    prefs[k] = {"w_win": x["w_win_indices"], "w_loose": x["w_loose_indices"]}
+                else:
+                    prefs[k] = {
+                        "w_win": x.get("w_plus_indices", []),
+                        "w_loose": x.get("w_minus_indices", []),
+                    }
             pipeline = {
                 "scores": {},
                 "descriptions": {},
-                "preferences": {
-                    int(x["k"]): {"w_plus": x["w_plus_indices"], "w_minus": x["w_minus_indices"]}
-                    for x in prefs_list
-                },
+                "preferences": prefs,
             }
         else:
             from dpo.preference_builder import build_preference_pipeline

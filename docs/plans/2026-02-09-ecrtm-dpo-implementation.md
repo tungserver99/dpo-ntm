@@ -112,7 +112,7 @@ def test_dpo_loss_basic():
                          [0.5, 1.0, 1.5]])
     beta_ref = torch.tensor([[1.0, 1.0, 1.0],
                              [1.0, 1.0, 1.0]])
-    prefs = {0: {"w_plus": [0], "w_minus": [2]}}
+    prefs = {0: {"w_win": [0], "w_loose": [2]}}
     loss = dpo_loss(beta, beta_ref, prefs, alpha=1.0)
     assert loss.item() > 0
 ```

@@ -2,7 +2,10 @@ import os
 import numpy as np
 import evaluations
 
-def evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, logger, wandb = None, read_labels=True):
+def evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, logger, wandb = None, read_labels=True, eval_tag=None):
+    if eval_tag:
+        print(f"[EVAL] {eval_tag}")
+        logger.info(f"[EVAL] {eval_tag}")
     top_words_10 = trainer.save_top_words(
         dataset.vocab, 10, current_run_dir)
     top_words_15 = trainer.save_top_words(
@@ -99,5 +102,14 @@ def evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, l
     # wandb.log({"TC_train": TC_train})
     logger.info(f"TC_train: {TC_train:.5f}")
     logger.info(f'TC_train list: {TC_train_list}')
+
+    # LLM eval
+    if getattr(args, "enable_llm_eval", True):
+        llm_scores, llm_mean = evaluations.llm_eval(
+            top_words_15, llm_model=args.dpo_llm_model, out_dir=current_run_dir, resume=True
+        )
+        print(f"LLM_eval_mean: {llm_mean:.5f}")
+        logger.info(f"LLM_eval_mean: {llm_mean:.5f}")
+        logger.info(f"LLM_eval_scores: {llm_scores}")
 
     # wandb.finish()

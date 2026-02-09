@@ -13,6 +13,8 @@ from models.SAE_NTM import SAE
 import datasethandler
 import scipy
 from evaluate import evaluate
+import torch
+import copy
 # import wandb
 
 RESULT_DIR = 'results'
@@ -34,6 +36,14 @@ if __name__ == "__main__":
     current_run_dir = os.path.join(RESULT_DIR + "/" + str(args.model) + "/" + str(args.dataset) + "/" 
                                    + str(args.num_topics),str(args.weight_ECR)+"-"+str(args.epochs)+"-"+current_time)
     current_checkpoint_dir = os.path.join(current_run_dir, "checkpoints")
+    use_dpo = args.enable_dpo and args.model == "ECRTM"
+    base_content_dir = None
+    base_checkpoint_dir = current_checkpoint_dir
+    if use_dpo:
+        base_content_dir = os.path.join(current_run_dir, "base_content")
+        base_checkpoint_dir = os.path.join(base_content_dir, "checkpoints")
+        miscellaneous.create_folder_if_not_exist(base_content_dir)
+        os.makedirs(base_checkpoint_dir, exist_ok=True)
     os.makedirs(current_checkpoint_dir, exist_ok=True) # QUESTION: is this necessary?
     miscellaneous.create_folder_if_not_exist(current_run_dir)
 
@@ -134,18 +144,16 @@ if __name__ == "__main__":
                                             lr_step_size=args.lr_step_size
         )
     else:
-        dpo_run_dir = current_run_dir
-        if args.dpo_run_dir:
-            dpo_run_dir = args.dpo_run_dir
+        dpo_run_dir = base_content_dir if use_dpo else current_run_dir
         trainer = basic_trainer.BasicTrainer(model, epochs=args.epochs,
                                             learning_rate=args.lr,
                                             batch_size=args.batch_size,
                                             lr_scheduler=args.lr_scheduler,
                                             lr_step_size=args.lr_step_size,
                                             device=args.device,
-                                            checkpoint_dir=current_checkpoint_dir,
+                                            checkpoint_dir=base_checkpoint_dir,
                                             checkpoint_epoch=args.checkpoint_epoch,
-                                            enable_dpo=(args.enable_dpo and args.model == "ECRTM"),
+                                            enable_dpo=use_dpo,
                                             dpo_start_epoch=args.dpo_start_epoch,
                                             dpo_weight=args.dpo_weight,
                                             dpo_alpha=args.dpo_alpha,
@@ -169,7 +177,25 @@ if __name__ == "__main__":
     else:
         trainer.train(dataset)
     # save beta, theta and top words
+        if use_dpo and base_content_dir:
+            final_state = copy.deepcopy(trainer.model.state_dict())
+            base_snapshot_path = os.path.join(
+                base_content_dir, f"dpo_snapshot_epoch_{args.dpo_start_epoch}.pth"
+            )
+            if os.path.isfile(base_snapshot_path):
+                snapshot = torch.load(base_snapshot_path, map_location=args.device)
+                trainer.model.load_state_dict(snapshot["model_state_dict"])
+                base_beta = trainer.save_beta(base_content_dir)
+                base_train_theta, base_test_theta = trainer.save_theta(dataset, base_content_dir)
+                evaluate(
+                    args, trainer, dataset, base_train_theta, base_test_theta,
+                    base_content_dir, logger, read_labels=True, eval_tag="BASE"
+                )
+            else:
+                logger.info(f"Base snapshot not found: {base_snapshot_path}")
+            trainer.model.load_state_dict(final_state)
+
         beta = trainer.save_beta(current_run_dir)
         train_theta, test_theta = trainer.save_theta(dataset, current_run_dir)
 
-    evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, logger, read_labels=True)
+    evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, logger, read_labels=True, eval_tag="FINAL")

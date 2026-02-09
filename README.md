@@ -55,6 +55,7 @@ python main.py \
   --weight_ECR 200 \
   --use_pretrainWE \
   --enable_dpo \
+  --enable_llm_eval \
   --dpo_start_epoch 400 \
   --dpo_weight 10.0 \
   --dpo_alpha 1.0 \

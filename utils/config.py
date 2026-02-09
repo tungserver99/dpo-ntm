@@ -84,6 +84,8 @@ def add_training_argument(parser):
 
 def add_eval_argument(parser):
     parser.add_argument('--tune_SVM', action='store_true', default=False)
+    parser.add_argument('--enable_llm_eval', action='store_true', default=True,
+                        help='enable LLM-based topic evaluation')
 
 
 def save_config(args, path):
