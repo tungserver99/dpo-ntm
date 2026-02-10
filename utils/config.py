@@ -64,7 +64,7 @@ def add_training_argument(parser):
         '--dpo_topic_filter',
         type=str,
         default='cv_below_avg',
-        choices=['cv_below_avg', 'llm_score_1_2', 'either'],
+        choices=['cv_below_avg', 'llm_score_1_2', 'either', 'none'],
         help='topic filter for applying DPO loss'
     )
     parser.add_argument('--enable_dpo', action='store_true', default=False,

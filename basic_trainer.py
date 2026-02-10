@@ -9,6 +9,7 @@ import os
 import scipy
 from time import time
 import json
+import evaluations
 
 
 class BasicTrainer:
@@ -137,6 +138,9 @@ class BasicTrainer:
 
             if self.enable_dpo and epoch == self.dpo_start_epoch:
                 self._prepare_dpo(dataset_handler, epoch)
+
+        if self.enable_dpo and self._dpo_ready:
+            self._log_eval_metrics(dataset_handler, eval_tag="POST_DPO")
     
     def save_checkpoint(self, epoch, optimizer):
         checkpoint = {
@@ -167,6 +171,8 @@ class BasicTrainer:
         if not hasattr(self.model, "get_beta"):
             self.logger.info("Model has no get_beta; skipping DPO setup.")
             return
+
+        self._log_eval_metrics(dataset_handler, eval_tag="PRE_DPO")
 
         # Save snapshot
         snapshot_path = os.path.join(self.dpo_run_dir, f"dpo_snapshot_epoch_{epoch}.pth")
@@ -223,6 +229,8 @@ class BasicTrainer:
 
         # Topic filter
         use_topics = set()
+        if self.dpo_topic_filter == "none":
+            use_topics = set(pipeline["preferences"].keys())
         if self.dpo_topic_filter in ["cv_below_avg", "either"]:
             from evaluations.topic_coherence import compute_topic_coherence
             cv_list, cv_mean = compute_topic_coherence(
@@ -238,7 +246,11 @@ class BasicTrainer:
                     use_topics.add(int(k))
 
         prefs = pipeline["preferences"]
-        filtered_prefs = {k: v for k, v in prefs.items() if k in use_topics}
+
+        if self.dpo_topic_filter == "none":
+            filtered_prefs = prefs
+        else:
+            filtered_prefs = {k: v for k, v in prefs.items() if k in use_topics}
 
         self._dpo_prefs = filtered_prefs
         self._beta_ref_logits = torch.from_numpy(beta_ref_logits).to(self.device)
@@ -250,6 +262,59 @@ class BasicTrainer:
             for k in sorted(use_topics):
                 f.write(json.dumps({"k": k}) + "\n")
         self.logger.info(f"DPO selected topics saved: {topics_path}")
+
+    def _log_eval_metrics(self, dataset_handler, eval_tag=None):
+        if eval_tag:
+            print(f"[EVAL] {eval_tag}")
+            self.logger.info(f"[EVAL] {eval_tag}")
+
+        vocab = dataset_handler.vocab
+        top_words_15 = self.export_top_words(vocab, 15)
+
+        TD_15 = evaluations.compute_topic_diversity(top_words_15, _type="TD")
+        print(f"TD_15: {TD_15:.5f}")
+        self.logger.info(f"TD_15: {TD_15:.5f}")
+
+        train_theta = self.test(dataset_handler.train_data)
+        test_theta = self.test(dataset_handler.test_data)
+
+        has_labels = (
+            hasattr(dataset_handler, "train_labels")
+            and hasattr(dataset_handler, "test_labels")
+            and dataset_handler.train_labels is not None
+            and dataset_handler.test_labels is not None
+        )
+        if has_labels:
+            clustering_results = evaluations.evaluate_clustering(
+                test_theta, dataset_handler.test_labels
+            )
+            print(f"NMI: ", clustering_results["NMI"])
+            print(f"Purity: ", clustering_results["Purity"])
+            self.logger.info(f"NMI: {clustering_results['NMI']}")
+            self.logger.info(f"Purity: {clustering_results['Purity']}")
+
+            classification_results = evaluations.evaluate_classification(
+                train_theta,
+                test_theta,
+                dataset_handler.train_labels,
+                dataset_handler.test_labels,
+                tune=False,
+            )
+            print(f"Accuracy: ", classification_results["acc"])
+            print(f"Macro-f1", classification_results["macro-F1"])
+            self.logger.info(f"Accuracy: {classification_results['acc']}")
+            self.logger.info(f"Macro-f1: {classification_results['macro-F1']}")
+
+        if hasattr(dataset_handler, "train_texts"):
+            TC_train_list, TC_train = evaluations.compute_topic_coherence(
+                dataset_handler.train_texts,
+                dataset_handler.vocab,
+                top_words_15,
+                cv_type="c_v",
+            )
+            print(f"TC_train: {TC_train:.5f}")
+            self.logger.info(f"TC_train: {TC_train:.5f}")
+            self.logger.info(f"TC_train list: {TC_train_list}")
 
     def test(self, input_data):
         data_size = input_data.shape[0]
