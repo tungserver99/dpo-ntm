@@ -25,7 +25,7 @@ To run and evaluate our model for YahooAnswers dataset, run this example:
 ## DPO End-to-End Training (ECRTM)
 
 This repo supports LLM-guided preference learning (DPO) for **ECRTM** in a single run:
-training normally → build preference dataset (LLM + embeddings) → DPO fine-tuning.
+training normally -> build preference dataset (LLM + embeddings) -> DPO fine-tuning.
 
 ### Prerequisites
 
@@ -39,9 +39,9 @@ training normally → build preference dataset (LLM + embeddings) → DPO fine-t
 - `--dpo_start_epoch` : epoch E to snapshot and start preference building
 - `--dpo_weight` : weight for DPO loss
 - `--dpo_alpha` : temperature for DPO loss
-- `--dpo_topic_filter` : `cv_below_avg` (default) | `llm_score_1_2` | `either`
+- `--dpo_topic_filter` : `cv_below_avg` (default) | `llm_score_1_2` | `either` | `none`
 - `--dpo_llm_model` : LLM model (default `gpt-4o`)
-- `--dpo_only_preferences` : skip preference building; use existing `preferences.jsonl`
+- `--dpo_only_preferences` : skip preference building; use existing DPO artifacts
 - `--dpo_run_dir` : run directory containing DPO artifacts to reuse
 
 ### Example (End-to-End)
@@ -66,10 +66,6 @@ python main.py \
 ### What Gets Saved (per run directory)
 
 - `top_words_10/15/20/25.txt`
-- `top_words_10/15/20/25.jsonl`
-- `topic_scores.jsonl`
-- `topic_descriptions.jsonl`
-- `extra_words.jsonl`
 - `preferences.jsonl`
 - `beta_ref_logits.npy`
 - `dpo_snapshot_epoch_E.pth`
@@ -82,8 +78,11 @@ python main.py \
 
 ### Reuse Existing Preferences (Only DPO Training)
 
-If you want to **skip preference building** and only train with DPO loss, make sure this file exists:
+If you want to **skip preference building** and only train with DPO loss, make sure these files exist in `--dpo_run_dir`:
 - `preferences.jsonl`
+- `top_words_15.txt`
+- `beta_ref_logits.npy`
+- `dpo_snapshot_epoch_E.pth` (E must match `--dpo_start_epoch`)
 
 Then run with:
 
@@ -91,7 +90,15 @@ Then run with:
 python main.py \
   --model ECRTM \
   --dataset 20NG \
+  --num_topics 50 \
+  --weight_ECR 200 \
+  --use_pretrainWE \
   --enable_dpo \
+  --dpo_start_epoch 350 \
+  --dpo_weight 20.0 \
+  --dpo_alpha 1.0 \
+  --dpo_topic_filter cv_below_avg \
+  --dpo_llm_model gpt-4o \
   --dpo_only_preferences \
   --dpo_run_dir <path_to_previous_run_dir>
 ```
