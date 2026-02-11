@@ -205,6 +205,9 @@ class BasicTrainer:
         if not hasattr(self.model, "get_beta"):
             self.logger.info("Model has no get_beta; skipping DPO setup.")
             return
+
+        self._log_eval_metrics(dataset_handler, eval_tag="PRE_DPO")
+
         if self.dpo_only_preferences:
             # Use existing artifacts from dpo_run_dir without overwriting
             prefs_path = os.path.join(self.dpo_run_dir, "preferences.jsonl")
@@ -216,8 +219,6 @@ class BasicTrainer:
             beta_ref_path = os.path.join(self.dpo_run_dir, "beta_ref_logits.npy")
             if not os.path.isfile(beta_ref_path):
                 raise RuntimeError("beta_ref_logits.npy not found while dpo_only_preferences is set.")
-
-        self._log_eval_metrics(dataset_handler, eval_tag="PRE_DPO")
             def _load_top_words_txt(path):
                 lines = []
                 with open(path, "r", encoding="utf-8") as f:
