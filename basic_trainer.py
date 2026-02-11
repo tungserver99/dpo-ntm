@@ -1,4 +1,5 @@
 import numpy as np
+import random
 from tqdm import tqdm
 import torch
 from torch.optim.lr_scheduler import StepLR
@@ -15,11 +16,11 @@ import evaluations
 class BasicTrainer:
     def __init__(self, model, epochs=200, learning_rate=0.002, batch_size=200, 
                  lr_scheduler=None, lr_step_size=125, log_interval=5, 
-                 device="cuda", checkpoint_dir=None, checkpoint_epoch=400,
+                 device="cuda", checkpoint_dir=None,
                  enable_dpo=False, dpo_start_epoch=200, dpo_weight=1.0,
                  dpo_alpha=1.0, dpo_topic_filter="cv_below_avg",
                  dpo_llm_model="gpt-4o", dpo_only_preferences=False,
-                 dpo_run_dir=None, dpo_dataset=None):
+                 dpo_run_dir=None, dpo_dataset=None, start_epoch=0):
         self.model = model
         self.epochs = epochs
         self.learning_rate = learning_rate
@@ -30,7 +31,6 @@ class BasicTrainer:
         self.log_interval = log_interval
         self.device = device
         self.checkpoint_dir = checkpoint_dir
-        self.checkpoint_epoch = checkpoint_epoch
 
         self.logger = logging.getLogger('main')
 
@@ -43,10 +43,12 @@ class BasicTrainer:
         self.dpo_only_preferences = dpo_only_preferences
         self.dpo_run_dir = dpo_run_dir
         self.dpo_dataset = dpo_dataset
+        self.start_epoch = start_epoch
 
         self._dpo_ready = False
         self._dpo_prefs = None
         self._beta_ref_logits = None
+        self._resume_state = None
 
     def make_optimizer(self,):
         args_dict = {
@@ -82,9 +84,41 @@ class BasicTrainer:
             self.logger.info("===>using lr_scheduler")
             self._lr_scheduler = self.make_lr_scheduler(optimizer)
 
+        if self._resume_state:
+            opt_state = self._resume_state.get("optimizer_state_dict")
+            if opt_state:
+                optimizer.load_state_dict(opt_state)
+            sched_state = self._resume_state.get("lr_scheduler_state_dict")
+            if self._lr_scheduler and sched_state:
+                self._lr_scheduler.load_state_dict(sched_state)
+            rng_state = self._resume_state.get("rng_state")
+            if rng_state:
+                if "torch" in rng_state:
+                    torch_state = rng_state["torch"]
+                    if not torch.is_tensor(torch_state):
+                        torch_state = torch.tensor(torch_state, dtype=torch.uint8)
+                    torch.set_rng_state(torch_state.detach().to(device="cpu", dtype=torch.uint8))
+                if "cuda" in rng_state and torch.cuda.is_available():
+                    cuda_state = rng_state["cuda"]
+                    if not isinstance(cuda_state, (list, tuple)):
+                        cuda_state = [cuda_state]
+                    normalized_cuda_state = []
+                    for state in cuda_state:
+                        if not torch.is_tensor(state):
+                            state = torch.tensor(state, dtype=torch.uint8)
+                        normalized_cuda_state.append(state.detach().to(device="cpu", dtype=torch.uint8))
+                    torch.cuda.set_rng_state_all(normalized_cuda_state)
+                if "numpy" in rng_state:
+                    np.random.set_state(rng_state["numpy"])
+                if "python" in rng_state:
+                    random.setstate(rng_state["python"])
+
+        if self.enable_dpo and not self._dpo_ready and self.start_epoch >= self.dpo_start_epoch:
+            self._prepare_dpo(dataset_handler, self.dpo_start_epoch, optimizer)
+
         data_size = len(dataset_handler.train_dataloader.dataset)
 
-        for epoch in tqdm(range(1, self.epochs + 1)):
+        for epoch in tqdm(range(self.start_epoch + 1, self.epochs + 1)):
             self.model.train()
             loss_rst_dict = defaultdict(float)
             # wandb.log({'epoch': epoch})
@@ -133,11 +167,11 @@ class BasicTrainer:
                 print(output_log)
                 self.logger.info(output_log)
             
-            if epoch == self.checkpoint_epoch and self.checkpoint_dir is not None:
+            if epoch == self.dpo_start_epoch and self.checkpoint_dir is not None:
                 self.save_checkpoint(epoch, optimizer)
 
             if self.enable_dpo and epoch == self.dpo_start_epoch:
-                self._prepare_dpo(dataset_handler, epoch)
+                self._prepare_dpo(dataset_handler, epoch, optimizer)
 
         if self.enable_dpo and self._dpo_ready:
             self._log_eval_metrics(dataset_handler, eval_tag="POST_DPO")
@@ -164,39 +198,67 @@ class BasicTrainer:
         beta = self.model.get_beta()
         return (beta + 1e-12).log()
 
-    def _prepare_dpo(self, dataset_handler, epoch):
+    def _prepare_dpo(self, dataset_handler, epoch, optimizer=None):
         if self.dpo_run_dir is None:
             self.logger.info("DPO enabled but run dir is None. Skipping DPO setup.")
             return
         if not hasattr(self.model, "get_beta"):
             self.logger.info("Model has no get_beta; skipping DPO setup.")
             return
+        if self.dpo_only_preferences:
+            # Use existing artifacts from dpo_run_dir without overwriting
+            prefs_path = os.path.join(self.dpo_run_dir, "preferences.jsonl")
+            if not os.path.isfile(prefs_path):
+                raise RuntimeError("preferences.jsonl not found while dpo_only_preferences is set.")
+            top15_path = os.path.join(self.dpo_run_dir, "top_words_15.txt")
+            if not os.path.isfile(top15_path):
+                raise RuntimeError("top_words_15.txt not found while dpo_only_preferences is set.")
+            beta_ref_path = os.path.join(self.dpo_run_dir, "beta_ref_logits.npy")
+            if not os.path.isfile(beta_ref_path):
+                raise RuntimeError("beta_ref_logits.npy not found while dpo_only_preferences is set.")
 
         self._log_eval_metrics(dataset_handler, eval_tag="PRE_DPO")
+            def _load_top_words_txt(path):
+                lines = []
+                with open(path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        lines.append(line)
+                return lines
 
-        # Save snapshot
-        snapshot_path = os.path.join(self.dpo_run_dir, f"dpo_snapshot_epoch_{epoch}.pth")
-        torch.save({"epoch": epoch, "model_state_dict": self.model.state_dict()}, snapshot_path)
-        self.logger.info(f"DPO snapshot saved: {snapshot_path}")
+            top_words_15 = _load_top_words_txt(top15_path)
+            beta_ref_logits = np.load(beta_ref_path)
+        else:
+            # Save snapshot
+            snapshot_path = os.path.join(self.dpo_run_dir, f"dpo_snapshot_epoch_{epoch}.pth")
+            snapshot = {
+                "epoch": epoch,
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict() if optimizer is not None else None,
+                "lr_scheduler_state_dict": self._lr_scheduler.state_dict() if self._lr_scheduler else None,
+                "rng_state": self._capture_rng_state(),
+            }
+            torch.save(snapshot, snapshot_path)
+            self.logger.info(f"DPO snapshot saved: {snapshot_path}")
 
-        # Save top words at E
-        vocab = dataset_handler.vocab
-        top_words_10 = self.save_top_words(vocab, 10, self.dpo_run_dir)
-        top_words_15 = self.save_top_words(vocab, 15, self.dpo_run_dir)
-        self.save_top_words(vocab, 20, self.dpo_run_dir)
-        self.save_top_words(vocab, 25, self.dpo_run_dir)
+            # Save top words at E
+            vocab = dataset_handler.vocab
+            top_words_10 = self.save_top_words(vocab, 10, self.dpo_run_dir)
+            top_words_15 = self.save_top_words(vocab, 15, self.dpo_run_dir)
+            self.save_top_words(vocab, 20, self.dpo_run_dir)
+            self.save_top_words(vocab, 25, self.dpo_run_dir)
 
-        # Save beta ref logits
-        beta_ref_logits = self._get_beta_logits().detach().cpu().numpy()
-        beta_ref_path = os.path.join(self.dpo_run_dir, "beta_ref_logits.npy")
-        np.save(beta_ref_path, beta_ref_logits)
-        self.logger.info(f"beta_ref_logits saved: {beta_ref_path}")
+            # Save beta ref logits
+            beta_ref_logits = self._get_beta_logits().detach().cpu().numpy()
+            beta_ref_path = os.path.join(self.dpo_run_dir, "beta_ref_logits.npy")
+            np.save(beta_ref_path, beta_ref_logits)
+            self.logger.info(f"beta_ref_logits saved: {beta_ref_path}")
 
         # Build preferences (LLM + embeddings)
         if self.dpo_only_preferences:
             prefs_path = os.path.join(self.dpo_run_dir, "preferences.jsonl")
-            if not os.path.isfile(prefs_path):
-                raise RuntimeError("preferences.jsonl not found while dpo_only_preferences is set.")
             from dpo.jsonl_io import read_jsonl
             prefs_list = read_jsonl(prefs_path)
             prefs = {}
@@ -315,6 +377,19 @@ class BasicTrainer:
             print(f"TC_train: {TC_train:.5f}")
             self.logger.info(f"TC_train: {TC_train:.5f}")
             self.logger.info(f"TC_train list: {TC_train_list}")
+
+    def set_resume_state(self, state):
+        self._resume_state = state
+
+    def _capture_rng_state(self):
+        state = {
+            "torch": torch.get_rng_state(),
+            "numpy": np.random.get_state(),
+            "python": random.getstate(),
+        }
+        if torch.cuda.is_available():
+            state["cuda"] = torch.cuda.get_rng_state_all()
+        return state
 
     def test(self, input_data):
         data_size = input_data.shape[0]

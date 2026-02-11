@@ -58,8 +58,6 @@ def add_training_argument(parser):
                             currently support: step', default='StepLR')
     parser.add_argument('--lr_step_size', type=int, default=125,
                         help='step size for learning rate scheduler')
-    parser.add_argument('--checkpoint_epoch', type=int, default=400,
-                        help='checkpoint epoch to save the model')
     parser.add_argument(
         '--dpo_topic_filter',
         type=str,
@@ -78,7 +76,7 @@ def add_training_argument(parser):
     parser.add_argument('--dpo_llm_model', type=str, default='gpt-4o',
                         help='LLM model for preference generation')
     parser.add_argument('--dpo_only_preferences', action='store_true', default=False,
-                        help='skip preference building; use existing preferences.jsonl')
+                        help='resume DPO from snapshot using existing preferences in --dpo_run_dir')
     parser.add_argument('--dpo_run_dir', type=str, default='',
                         help='override run dir for DPO artifacts (topic_scores, preferences, beta_ref_logits)')
 

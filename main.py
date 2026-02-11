@@ -144,7 +144,12 @@ if __name__ == "__main__":
                                             lr_step_size=args.lr_step_size
         )
     else:
-        dpo_run_dir = base_content_dir if use_dpo else current_run_dir
+        if use_dpo and args.dpo_only_preferences:
+            if not args.dpo_run_dir:
+                raise RuntimeError("--dpo_run_dir is required when --dpo_only_preferences is set.")
+            dpo_run_dir = args.dpo_run_dir
+        else:
+            dpo_run_dir = base_content_dir if use_dpo else current_run_dir
         trainer = basic_trainer.BasicTrainer(model, epochs=args.epochs,
                                             learning_rate=args.lr,
                                             batch_size=args.batch_size,
@@ -152,7 +157,6 @@ if __name__ == "__main__":
                                             lr_step_size=args.lr_step_size,
                                             device=args.device,
                                             checkpoint_dir=base_checkpoint_dir,
-                                            checkpoint_epoch=args.checkpoint_epoch,
                                             enable_dpo=use_dpo,
                                             dpo_start_epoch=args.dpo_start_epoch,
                                             dpo_weight=args.dpo_weight,
@@ -161,7 +165,8 @@ if __name__ == "__main__":
                                             dpo_llm_model=args.dpo_llm_model,
                                             dpo_only_preferences=args.dpo_only_preferences,
                                             dpo_run_dir=dpo_run_dir,
-                                            dpo_dataset=args.dataset
+                                            dpo_dataset=args.dataset,
+                                            start_epoch=0
                                             )
 
 
@@ -175,15 +180,34 @@ if __name__ == "__main__":
         train_theta = np.asarray(train_theta.cpu())
         test_theta = np.asarray(test_theta.cpu())
     else:
+        if use_dpo and args.dpo_only_preferences:
+            snapshot_path = os.path.join(
+                args.dpo_run_dir,
+                f"dpo_snapshot_epoch_{args.dpo_start_epoch}.pth",
+            )
+            if not os.path.isfile(snapshot_path):
+                raise RuntimeError(f"Snapshot not found: {snapshot_path}")
+            # Load snapshot tensors on CPU first; RNG CPU state must stay CPU ByteTensor.
+            snapshot = torch.load(snapshot_path, map_location="cpu", weights_only=False)
+            snapshot_epoch = int(snapshot.get("epoch", args.dpo_start_epoch))
+            if snapshot_epoch >= args.epochs:
+                raise RuntimeError(
+                    f"Snapshot epoch {snapshot_epoch} >= total epochs {args.epochs}."
+                )
+            trainer.model.load_state_dict(snapshot["model_state_dict"])
+            trainer.start_epoch = snapshot_epoch
+            trainer.set_resume_state(snapshot)
+            logger.info(f"[DPO] Resuming from snapshot epoch {snapshot_epoch}: {snapshot_path}")
         trainer.train(dataset)
     # save beta, theta and top words
         if use_dpo and base_content_dir:
             final_state = copy.deepcopy(trainer.model.state_dict())
+            base_snapshot_dir = args.dpo_run_dir if args.dpo_only_preferences else base_content_dir
             base_snapshot_path = os.path.join(
-                base_content_dir, f"dpo_snapshot_epoch_{args.dpo_start_epoch}.pth"
+                base_snapshot_dir, f"dpo_snapshot_epoch_{args.dpo_start_epoch}.pth"
             )
             if os.path.isfile(base_snapshot_path):
-                snapshot = torch.load(base_snapshot_path, map_location=args.device)
+                snapshot = torch.load(base_snapshot_path, map_location="cpu", weights_only=False)
                 trainer.model.load_state_dict(snapshot["model_state_dict"])
                 base_beta = trainer.save_beta(base_content_dir)
                 base_train_theta, base_test_theta = trainer.save_theta(dataset, base_content_dir)
