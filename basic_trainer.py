@@ -19,7 +19,8 @@ class BasicTrainer:
                  enable_dpo=False, dpo_start_epoch=200, dpo_weight=1.0,
                  dpo_alpha=1.0, dpo_topic_filter="cv_below_avg",
                  dpo_llm_model="gpt-4o", dpo_only_preferences=False,
-                 dpo_run_dir=None, dpo_dataset=None, start_epoch=0):
+                 dpo_run_dir=None, dpo_dataset=None, start_epoch=0,
+                 freeze_we_epoch=-1):
         self.model = model
         self.epochs = epochs
         self.learning_rate = learning_rate
@@ -43,6 +44,7 @@ class BasicTrainer:
         self.dpo_run_dir = dpo_run_dir
         self.dpo_dataset = dpo_dataset
         self.start_epoch = start_epoch
+        self.freeze_we_epoch = freeze_we_epoch
 
         self._dpo_ready = False
         self._dpo_prefs = None
@@ -121,6 +123,11 @@ class BasicTrainer:
             self.model.train()
             loss_rst_dict = defaultdict(float)
             # wandb.log({'epoch': epoch})
+
+            if self.freeze_we_epoch > 0 and epoch == self.freeze_we_epoch:
+                if hasattr(self.model, "word_embeddings"):
+                    self.model.word_embeddings.requires_grad = False
+                    self.logger.info(f"Frozen word_embeddings at epoch {epoch}")
 
             for batch_data in dataset_handler.train_dataloader:
 
@@ -201,6 +208,9 @@ class BasicTrainer:
         if not hasattr(self.model, "get_beta"):
             self.logger.info("Model has no get_beta; skipping DPO setup.")
             return
+        if hasattr(self.model, "word_embeddings"):
+            # Freeze word embeddings when entering DPO phase
+            self.model.word_embeddings.requires_grad = False
 
         if self.dpo_only_preferences:
             # Use existing artifacts from dpo_run_dir without overwriting
@@ -444,7 +454,7 @@ class FastBasicTrainer:
     def make_lr_scheduler(self, optimizer):
         if self.lr_scheduler == "StepLR":
             lr_scheduler = StepLR(
-                optimizer, step_size=self.lr_step_size, gamma=0.5, verbose=False)
+                optimizer, step_size=self.lr_step_size, gamma=0.5)
         else:
             raise NotImplementedError(self.lr_scheduler)
         return lr_scheduler

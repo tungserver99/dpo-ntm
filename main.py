@@ -71,7 +71,7 @@ if __name__ == "__main__":
     else:
         dataset = datasethandler.BasicDatasetHandler(
             os.path.join(DATA_DIR, args.dataset), device=args.device, read_labels=read_labels,
-            as_tensor=True, contextual_embed=True)
+            as_tensor=True, contextual_embed=True, plm_model=args.plm_model)
         # dataset = datasethandler.BasicDatasetHandler(
         #     f'{DATA_DIR}/{args.dataset}', device=args.device, read_labels=read_labels,
         #     as_tensor=True, contextual_embed=True)
@@ -166,7 +166,8 @@ if __name__ == "__main__":
                                             dpo_only_preferences=args.dpo_only_preferences,
                                             dpo_run_dir=dpo_run_dir,
                                             dpo_dataset=args.dataset,
-                                            start_epoch=0
+                                            start_epoch=0,
+                                            freeze_we_epoch=args.freeze_we_epoch
                                             )
 
 
@@ -200,7 +201,7 @@ if __name__ == "__main__":
             logger.info(f"[DPO] Resuming from snapshot epoch {snapshot_epoch}: {snapshot_path}")
         trainer.train(dataset)
     # save beta, theta and top words
-        if use_dpo and base_content_dir:
+        if use_dpo and base_content_dir and not args.dpo_only_preferences:
             final_state = copy.deepcopy(trainer.model.state_dict())
             base_snapshot_dir = args.dpo_run_dir if args.dpo_only_preferences else base_content_dir
             base_snapshot_path = os.path.join(

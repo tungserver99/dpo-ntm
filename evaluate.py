@@ -112,4 +112,16 @@ def evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, l
         logger.info(f"LLM_eval_mean: {llm_mean:.5f}")
         logger.info(f"LLM_eval_scores: {llm_scores}")
 
+    try:
+        tc_wiki_scores, tc_wiki_mean = evaluations.topic_coherence.TC_on_wikipedia_llm_itl(
+            os.path.join(current_run_dir, "top_words_15.txt"),
+            tc_metric="C_V",
+        )
+        print(f"TC_wikipedia_llm_itl: {tc_wiki_mean:.5f}")
+        logger.info(f"TC_wikipedia_llm_itl: {tc_wiki_mean:.5f}")
+        logger.info(f"TC_wikipedia_llm_itl_scores: {tc_wiki_scores}")
+    except Exception as exc:
+        print(f"TC_wikipedia_llm_itl failed: {exc}")
+        logger.info(f"TC_wikipedia_llm_itl failed: {exc}")
+
     # wandb.finish()

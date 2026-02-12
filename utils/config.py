@@ -58,6 +58,8 @@ def add_training_argument(parser):
                             currently support: step', default='StepLR')
     parser.add_argument('--lr_step_size', type=int, default=125,
                         help='step size for learning rate scheduler')
+    parser.add_argument('--freeze_we_epoch', type=int, default=-1,
+                        help='freeze word embeddings at this epoch (-1 to disable)')
     parser.add_argument(
         '--dpo_topic_filter',
         type=str,
@@ -82,7 +84,7 @@ def add_training_argument(parser):
 
 def add_eval_argument(parser):
     parser.add_argument('--tune_SVM', action='store_true', default=False)
-    parser.add_argument('--enable_llm_eval', action='store_true', default=True,
+    parser.add_argument('--enable_llm_eval', action='store_true', default=False,
                         help='enable LLM-based topic evaluation')
 
 
