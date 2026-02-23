@@ -1,0 +1,269 @@
+\documentclass[table, 11pt]{article}
+\usepackage[final]{acl}
+
+% Standard package includes
+%\usepackage
+\usepackage{booktabs}
+\usepackage{bm}
+\usepackage{tikz}
+\usetikzlibrary{bayesnet}
+\usepackage{times}
+\usepackage{blindtext}
+\usepackage{latexsym}
+\usepackage{amsmath}
+\usepackage{makecell}
+\usepackage{amssymb}
+\usepackage{dsfont}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{threeparttable}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{float}
+\usepackage{enumitem} % Include enumitem package
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
+
+% For proper rendering and hyphenation of words containing Latin characters (including in bib files)
+\usepackage[T1]{fontenc}
+% For Vietnamese characters
+% \usepackage[T5]{fontenc}
+% See https://www.latex-project.org/help/documentation/encguide.pdf for other character sets
+
+% This assumes your files are encoded as UTF8
+\usepackage[utf8]{inputenc}
+
+% This is not strictly necessary, and may be commented out,
+% but it will improve the layout of the manuscript,
+% and will typically save some space.
+\usepackage{microtype}
+
+% This is also not strictly necessary, and may be commented out.
+% However, it will improve the aesthetics of text in
+% the typewriter font.
+\usepackage{inconsolata}
+
+%Including images in your LaTeX document requires adding
+%additional package(s)
+\usepackage{graphicx}
+
+% If the title and author information does not fit in the area allocated, uncomment the following
+%
+%\setlength\titlebox{<dim>}
+%
+% and set <dim> to something 5cm or larger.
+\usepackage{multirow}
+\usepackage[normalem]{ulem}
+
+\definecolor{lightgray}{gray}{0.80}
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+
+\newcolumntype{g}{>{\columncolor{lightgray}}c}
+% \newcommand*{\method}{\textsc{SRE}\@\xspace}
+
+\title{LLM-guided Preference Learning for Neural Topic Models}
+
+\author{
+%   \textbf{Minh-Phuc Truong\textsuperscript{1}\footnotemark[1]},
+%     \textbf{Hai An Vu\textsuperscript{1}\footnotemark[1]},
+%   \textbf{Tu Vu\textsuperscript{2}\footnotemark[1]},
+%   \textbf{Diep Thi-Ngoc Nguyen\textsuperscript{3}}, \\
+%    \textbf{Linh Ngo Van\textsuperscript{1,\dag}}, 
+%   \textbf{Thien Huu Nguyen\textsuperscript{4}},
+%   \textbf{Trung Le\textsuperscript{5}}
+%   \bigskip \\
+% \textsuperscript{1}Hanoi University of Science and Technology,
+% \textsuperscript{2}ByteDance Inc, \\
+% \textsuperscript{3}VNU University of Engineering and Technology,
+% \textsuperscript{4}University of Oregon,
+% \textsuperscript{5}Monash University
+}
+
+\begin{document}
+
+\maketitle
+\renewcommand{\thefootnote}{\fnsymbol{footnote}}
+\footnotetext[1]{Equal contribution}
+\footnotetext[2]{Corresponding author: \href{mailto:email@domain}{ linhnv@soict.hust.edu.vn}}
+\renewcommand*{\thefootnote}{\arabic{footnote}}
+\begin{abstract}
+\end{abstract}
+\section{Introduction}\label{sec:intro}
+\section{Related Work}
+
+\section{Background}
+
+\subsection{Notations} \label{subsec:notations}
+
+    Denote $\mathbf{X}=\{x^d\}_{d=1}^{D}$ as a collection of Bag-of-Words (BoW) representations of $D$ documents with the vocabulary of $V$ words. Topic models aim to discover $K$ hidden topics in this corpus. The pre-trained language model embedding of document~$d$ is $x^d_{PLM}$. The clustering algorithm applied to $x^d_{PLM}$ produces $G$ clusters. We have $\beta \in \mathbb{R}^{V\times K}$ = $(\beta_1,\dots,\beta_K)$, where each $\beta_k \in \mathbb{R}^{V\times 1}$, as the topic-word distributions of $K$ desired topics. 
+    
+    With $L$ as the word embedding dimension, we set $ \textbf{w}_v \in \mathbb{R}^{L}, v \in \{1,2,\dots,V\}$ and ${\textbf{t}_k \in \mathbb{R}^{L}}, k \in \{1,2,\dots,K\}$ to be the word embeddings of word $v$ and topic embeddings of topic $k$, respectively. Each document $x^d$ has the topic proportion  $\theta_d \in \mathbb{R}^{K}$ indicating what topic it includes. $\mathds{1}_N$ denotes a vector of length $N$, where each entry is set to 1.
+    
+
+\subsection{VAE-based Topic Model} \label{subsec:VAE-based Topic Model}
+    
+    
+    Similar to many recent neural topic models~\cite{dieng2020etm, wu2023effective}, our approach is built on a VAE framework, which consists of two primary components: (i) an inference encoder that produces document-topic distributions; and (ii) a generative decoder that reconstructs the original text using the encoder’s output and the topic-word proportions. For the encoder, the Bag-of-Words (BoW) representation of a document $x^d$ is processed through neural networks to obtain the parameters of a normal distribution, where the mean $\mu=h_\mu(x^d)$ and the diagonal covariance matrix $\Sigma=\mathrm{diag}(h_\Sigma(x^d))$ are computed. The reparameterization trick~\cite{kingma2013vae} is then employed to sample a latent variable $\alpha$ from the posterior distribution $q(\alpha \vert x)=\mathcal{N}(\alpha \vert \mu, \Sigma)$, while the prior distribution of $\alpha$ is $p(\alpha)=\mathcal{N}(\alpha \vert \mu_0, \Sigma_0)$. Afterwards, the softmax function is applied to $\alpha$, producing the topic proportion $\theta=\mathrm{softmax}(\alpha)$. 
+        
+    Regarding the second component, VAE-based neural topic models aim to construct an effective representation for the topic-word distributions $\beta \in \mathbb{R}^{V\times K}$. There are several approaches to modeling $\beta$, such as directly inferring it through an optimization process~\cite{srivastava2017prodlda} or decomposing $\beta$ into the product of word embeddings~$\mathcal{W}$ and topic embeddings~$\mathcal{T}$. Alternatively,~\cite{wu2023effective} propose another form of $\beta$ that effectively addresses the issue of topic collapse as follows:
+    \begin{equation} \label{eq:beta_decomposition}
+            \beta_{ij} = \frac{\exp \left(-\Vert \mathbf{w}_i - \mathbf{t}_j \Vert^2 / \tau \right)}{\sum_{j'=1}^K \exp \left(-\Vert \mathbf{w}_i - \mathbf{t}_{j'} \Vert^2 / \tau \right)},
+    \end{equation}
+    where $\tau$ is a temperature hyperparameter. The word embeddings $\mathcal{T}$ are typically initialized using pre-trained embeddings such as GloVe~\cite{pennington-etal-2014-glove}.
+
+    % {$\mathcal{W}$};%
+    %         \node[latent, above= 0.5 of beta] (topic) {$\mathcal{T}$};%
+   
+    VAE-based models aim to reconstruct the BoW representations of documents using the topic-word distribution matrix $\beta$ and document-topic proportion $\theta_d$ as $\hat{x}^d \sim \mathrm{ Multinomial}(\mathrm{softmax}(\beta\theta_d))$. The topic modeling loss consists of a reconstruction term and a regularization term, as follows:
+    \begin{equation*} \label{eq:tm}
+        \begin{split}
+        \mathcal{L}_{\mathrm{TM}} = \frac{1}{D} \sum_{d=1}^{D} \Big[& - (x^d)^{\top} \log (\mathrm{softmax}(\beta \theta_d)) \\ &+ \mathrm{KL}(q(\alpha \vert x^d) \| p(\alpha)) \Big]
+        \end{split}
+    \end{equation*}
+
+
+\section{Methodology}
+\subsection{Collecting Preferences with an LLM}~\label{sec:llm-pref}
+For each topic $k$ extract the top-$M$ words by $\beta^{(0)}_{k,w}$ (or $p(w\mid k)$). Use an LLM to label each word as good (+) if it is related to the topic or bad (-) if it is not. To reduce noise, we use a voting technique: repeat the LLM query multiple times (e.g. 10) and take a majority vote for each word. We then partition the top-$M$ list into a \emph{good} list $L^+$ and a \emph{bad} list $L^-$. To construct preference pairs $(w^+,w^-)$, we randomly match words from the two lists. In practice we handle three cases:
+
+\begin{itemize}
+    \item \textbf{Case 1:} $|L^+| > |L^-|$. We randomly pair each word in $L^-$ with a word in $L^+$ (removing used words), then match the remaining words in $L^+$ to bad words (allowing reuse) to complete the pairing.
+    \item \textbf{Case 2:} $|L^+| < |L^-|$. Symmetric to Case 1, swapping the roles of $L^+$ and $L^-$.
+    \item \textbf{Case 3:} $|L^+| = |L^-|$. We simply pair each word in $L^+$ with one word in $L^-$ and vice versa.
+\end{itemize}
+
+Store the resulting preference dataset as $\mathcal{D}_{pref}=\{(k,w^+,w^-)\}$. 
+
+\subsection{LLM-guide preference learning in Neural Topic Model}
+
+In topic-word distribution, each top word will represent the relationship between it and the topics. Therefore, enhance the preference of top words in topic can improve the semantic quality of the topics and the unrelated words can be pushed to the back. To achieve that, we implement preference learning in the concept of neural topic models.
+
+To be specific, after training neural topic model, for each topic $k$, we attain a base or reference policy $\pi^{ref}_\phi(w|x,k) = softmax(\beta^{ref}_{k})_w$, with $\phi$ is the parameters of neural topic models. The goal is to optimize the policy $\pi_\phi(w|x,k)$ such that it assigns higher probability to outputs (words for a topic) that are preferred according to the reward signal $r(k, w)$. The preference dataset used is achieved from Section~\ref{sec:llm-pref} that $\mathcal{D}_{pref}=\{(k,w^+,w^-)\}$.
+
+Given preference pairs, we want to achieve a reward model $r(k, w)$ so that it ranks preferred words higher, the Bradley-Terry stipulates that the human preference distribution $P^*$ can be written as:
+
+\begin{align}
+&P^{*}(w^{+} \succ w^{-} \mid k) \\
+&= \frac{\exp\!\left( r(k, w^{+}) \right)}
+{\exp\!\left( r(k, w^{+}) \right) + \exp\!\left( r(k, w^{-}) \right)}.
+\end{align}
+
+Using the sigmoid function $\sigma$, the equation becomes:
+
+\begin{equation}
+P(w^{+} \succ w^{-} \mid k) 
+= \sigma \big( r(k, w^{+}) - r(k, w^{-}) \big)
+\label{eq:preference-sigmoid}
+\end{equation}
+
+The cross-entropy (negative log-likelihood) loss for the reward model is:
+
+\begin{equation}
+\mathcal{L}_{\mathrm{RM}}
+= - \mathbb{E}_{(k, w^{+}, w^{-})} 
+\log \sigma \big( r(k, w^{+}) - r(k, w^{-}) \big)
+\end{equation}
+
+The next step consists of optimizing the policy $p_\phi(w|x,k)$ 
+through reinforcement learning in order to maximize the reward. 
+However, directly maximizing the reward may cause the policy to deviate 
+excessively from the base policy $\pi^{ref}_\phi(w|x,k)$, resulting in unnatural 
+or overly optimized behavior. To mitigate this issue, a penalty term is 
+introduced to constrain the policy:
+
+\begin{align}
+\max_\phi \; &\mathbb{E}_{x \sim \mathrm{X},\, w \sim \pi_\phi(w|x,k)} 
+\left[ r(k, w) \right] \\
+& - \alpha \, D_{\mathrm{KL}} \![ \pi_\phi(w|x,k) \,\|\, \pi^{ref}_\phi(w|x,k) ]
+\label{eq:ppoeq}
+\end{align}
+
+Following prior works~\cite{DPO2023}, it is straightforward to show that
+the optimal solution to the KL-constrained reward maximization objective in Eq.~\ref{eq:ppoeq} takes the form:
+
+\begin{align}
+&\pi^{*}(w|x,k) 
+= \frac{1}{C(x,k)} \, \pi^{ref}(w|x,k) 
+\exp\!\left( \frac{r(k, w)}{\alpha} \right), \\
+\
+& C(x,k) = \sum_{v \in V}  \pi^{ref}(v|x,k) 
+\exp\!\left( \frac{r(k,w)}{\alpha} \right)
+\end{align}
+
+From the box above, taking the logarithm of both sides and then with some algebra we obtain:
+
+\begin{equation}
+ r(k, w) 
+= \alpha \log \frac{\pi^{*}(w|x,k) }{\pi^{ref}(w|x,k)} 
++ \alpha \log C(x,k).
+\label{eq:rkw}
+\end{equation}
+
+Substituting the reparameterization in Eq.~\ref{eq:rkw} for $r(k, w) $ into the preference model Eq.~\ref{eq:preference-sigmoid}, the partition function cancels, and we can express the human preference probability in terms of only the optimal policy $\pi^{*}$ and reference policy $\pi^{ref}$. Thus, the optimal RLHF policy $\pi^{*}$ under the Bradley-Terry model satisfies the preference model:
+
+\begin{align}
+P(w^{+} \succ w^{-} \mid k) 
+&= \sigma \big( \alpha \log \frac{\pi^{*}(w^{+}|x,k) }{\pi^{ref}(w^{+}|x,k)}  \\
+&- \alpha \log \frac{\pi^{*}(w^{-}|x,k) }{\pi^{ref}(w^{-}|x,k)}  \big)
+\end{align}
+
+Now that we have the probability of human preference data in terms of the optimal policy rather than
+the reward model, we can formulate a maximum likelihood objective for a parametrized policy $\pi_\phi$:
+
+\begin{align}
+\mathcal{L}^k_{DPO}
+= - \mathbb{E}_{(k, w^{+}, w^{-})} 
+\log & \sigma \big( \alpha \log \frac{\pi^{*}(w^{+}|x,k) }{\pi^{ref}(w^{+}|x,k)}  \\
+&- \alpha \log \frac{\pi^{*}(w^{-}|x,k) }{\pi^{ref}(w^{-}|x,k)} \big)
+\end{align}
+
+Recall that $\pi^{ref}_\phi(w|x,k) = softmax(\beta^{ref}_{k})_w$, we have  $\pi^{ref}_\phi(w|x,k) = \frac{e^{\beta^{ref}_{kw}}}{Z_k}$ with $Z^{ref}_k = \sum_{v \in V} e^{\beta^{ref}_{kv}}$. So we have:
+
+\begin{align}
+    \log \frac{\pi^{*}(w|x,k) }{\pi^{ref}(w|x,k)} &= (\beta_{kw} - \log Z_k) \\
+    &- (\beta^{ref}_{kw} - \log Z^{ref}_k) \\
+    &= (\beta_{kw} - \beta^{ref}_{kw}) \\
+    &- (\log Z_k - \log Z^{ref}_k)
+\end{align}
+
+Finally, we have:
+
+\begin{align}
+\mathcal{L}^k_{DPO}
+= - \mathbb{E}_{(k, w^{+}, w^{-})} 
+\log \sigma & \big[ \alpha ((\beta_{k, w^+} - \beta_{k, w^-}) \\
+&- (\beta^{ref}_{k, w^+} - \beta^{ref}_{k, w^-})) \big]
+\end{align}
+
+In gradient descent process, reference $\beta^{ref}$ will be frozen. Finally, we aggregate over all topics preference loss that: $\mathcal{L}_{DPO} = \sum_{k=1}^K \mathcal{L}^k_{DPO}$
+
+The overall loss for LLM-guided preference neural topic model is as follows:
+\begin{equation}
+    \mathcal{L}_{total} = \mathcal{L}_{TM} + \lambda \mathcal{L}_{DPO}
+\end{equation}
+
+\subsection{Preference Learning with Plackett-Luce Model}:
+Instead of $\mathcal{D}_{pref}=\{(k,w^+,w^-)\}$, we use $\mathcal{D}_{pref}=\{(k,w^1,w^2,...,w^N)\}$ with N is the number of top words, $(w^1,w^2,...,w^N)$ is the rankings of N top words proposed by LLMs. We will apply Preference Learning with Plackett-Luce Model to refine the topics.
+
+\section{Experiments}
+
+
+
+\section{Conclusion}
+
+\section{Limitations}
+
+
+\section*{Acknowledgements}
+
+
+
+\bibliography{ref}
+\bibliographystyle{acl_natbib}
+
+\newpage
+\appendix
+
+
+
+\end{document}

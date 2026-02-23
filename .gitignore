@@ -1,0 +1,28 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# data / artifacts
+datasets/
+results/
+wandb/
+*.pth
+*.npz
+*.npy
+*.pt
+*.ckpt
+
+# caches
+.cache/
+.pytest_cache/
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

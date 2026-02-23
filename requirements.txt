@@ -1,0 +1,16 @@
+numpy==1.26.4
+scipy==1.13.1
+tqdm==4.67.1
+
+torch==2.8.0+cu128
+torch-kmeans==0.2.0
+
+scikit-learn==1.7.2
+gensim==4.3.3
+sentence-transformers==5.1.1
+
+matplotlib==3.10.6
+wandb==0.22.0
+
+openai==1.109.1
+python-dotenv==1.2.1
