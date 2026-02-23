@@ -12,35 +12,18 @@ def add_dataset_argument(parser):
                         help='plm model name', default='all-mpnet-base-v2')
     
 def add_logging_argument(parser):
-    parser.add_argument('--wandb_prj', type=str, default='SAE_TM')
+    parser.add_argument('--wandb_prj', type=str, default='ECRTM_TM')
 
 
 def add_model_argument(parser):
-    parser.add_argument('--model', type=str, default='ZTM', help='model name')
+    parser.add_argument('--model', type=str, default='ECRTM', choices=['ECRTM'], help='model name')
     parser.add_argument('--num_topics', type=int, default=50)
-    parser.add_argument('--num_groups', type=int, default=20)
     parser.add_argument('--dropout', type=float, default=0.2)
-    parser.add_argument('--hidden_dim_1', type=int, default=384)
-    parser.add_argument('--hidden_dim_2', type=int, default=384)
-    parser.add_argument('--theta_temp', type=float, default=1.0)
-    parser.add_argument('--DT_alpha', type=float, default=3.0)
-    parser.add_argument('--TW_alpha', type=float, default=2.0)
-    
-    parser.add_argument('--weight_GR', type=float, default=1.)
-    parser.add_argument('--alpha_GR', type=float, default=5.)
-    parser.add_argument('--weight_InfoNCE', type=float, default=50.)
-    parser.add_argument('--beta_temp', type=float, default=0.2)
     parser.add_argument('--weight_ECR', type=float, default=100.0)
     parser.add_argument('--use_pretrainWE', action='store_true',
                         default=False, help='Enable use_pretrainWE mode')
     parser.add_argument('--train_WE', action='store_true',
                         default=False, help='Enable train_WE mode')
-
-def add_wete_argument(parser):
-    parser.add_argument('--glove', type=str, default='glove.6B.100d.txt', help='embedding model name')
-    parser.add_argument('--wete_beta', type=float, default=0.5)
-    parser.add_argument('--wete_epsilon', type=float, default=0.1)
-    parser.add_argument('--init_alpha', type=bool, default=True)
 
 
 def add_training_argument(parser):

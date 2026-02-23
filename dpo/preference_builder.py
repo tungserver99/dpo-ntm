@@ -334,35 +334,3 @@ def build_preference_pipeline(
         "descriptions": descriptions,
         "preferences": prefs,
     }
-
-
-def build_description_pipeline(
-    run_dir: str,
-    llm_model: str,
-    resume: bool = True,
-):
-    top15_path = os.path.join(run_dir, "top_words_15.txt")
-    top20_path = os.path.join(run_dir, "top_words_20.txt")
-    top_words_15 = _load_top_words_txt(top15_path)
-    top_words_20 = _load_top_words_txt(top20_path)
-
-    llm = LLMClient(model=llm_model)
-    scores_path = os.path.join(run_dir, "topic_scores.jsonl")
-    desc_path = os.path.join(run_dir, "topic_descriptions.jsonl")
-
-    if resume and os.path.isfile(scores_path):
-        scores = {int(x["k"]): int(x["llm_score"]) for x in read_jsonl(scores_path)}
-    else:
-        scores = _score_topics(llm, top_words_15)
-        write_jsonl(scores_path, [{"k": k, "llm_score": v} for k, v in scores.items()])
-
-    if resume and os.path.isfile(desc_path):
-        descriptions = {int(x["k"]): str(x.get("main_meaning", "")) for x in read_jsonl(desc_path)}
-    else:
-        descriptions = _describe_topics(llm, top_words_20, scores)
-        write_jsonl(desc_path, [{"k": k, "main_meaning": v} for k, v in descriptions.items()])
-
-    return {
-        "scores": scores,
-        "descriptions": descriptions,
-    }
