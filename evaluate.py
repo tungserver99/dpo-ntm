@@ -79,10 +79,16 @@ def evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, l
             test_theta, dataset.test_labels)
         print(f"NMI: ", clustering_results['NMI'])
         print(f'Purity: ', clustering_results['Purity'])
+        print(f"InversePurity: ", clustering_results['InversePurity'])
+        print(f"HarmonicPurity: ", clustering_results['HarmonicPurity'])
+        print(f"ARI: ", clustering_results['ARI'])
         # wandb.log({"NMI": clustering_results['NMI']})
         # wandb.log({"Purity": clustering_results['Purity']})
         logger.info(f"NMI: {clustering_results['NMI']}")
         logger.info(f"Purity: {clustering_results['Purity']}")
+        logger.info(f"InversePurity: {clustering_results['InversePurity']}")
+        logger.info(f"HarmonicPurity: {clustering_results['HarmonicPurity']}")
+        logger.info(f"ARI: {clustering_results['ARI']}")
 
     # evaluate classification
     if read_labels:

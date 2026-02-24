@@ -244,7 +244,7 @@ class BasicTrainer:
                     line = line.strip()
                     if not line:
                         continue
-                    lines.append(line.split())
+                    lines.append(line)
             return lines
 
         from dpo.jsonl_io import read_jsonl
@@ -307,7 +307,7 @@ class BasicTrainer:
             self.logger.info(f"beta_ref_logits saved: {beta_ref_path}")
 
             from dpo.preference_builder import build_preference_pipeline
-            plm_model = getattr(dataset_handler, "plm_model", "all-mpnet-base-v2")
+            plm_model = self.contrastive_doc_encoder
             pipeline = build_preference_pipeline(
                 run_dir=self.update_dir,
                 vocab=vocab,

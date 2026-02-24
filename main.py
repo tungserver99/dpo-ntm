@@ -51,8 +51,7 @@ if __name__ == "__main__":
         device=args.device,
         read_labels=read_labels,
         as_tensor=True,
-        contextual_embed=True,
-        plm_model=args.plm_model,
+        contextual_embed=False,
     )
 
     pretrainWE = scipy.sparse.load_npz(os.path.join(

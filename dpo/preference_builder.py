@@ -10,6 +10,10 @@ from dpo.jsonl_io import read_jsonl, write_jsonl
 from dpo.llm_client import LLMClient
 
 
+def _safe_name(name: str) -> str:
+    return name.replace("/", "_").replace("\\", "_").replace(":", "_")
+
+
 def _load_top_words_txt(path: str) -> List[List[str]]:
     lines = []
     with open(path, "r", encoding="utf-8") as f:
@@ -172,6 +176,39 @@ def _build_preferences(
 ):
     word_to_idx = {w: i for i, w in enumerate(vocab)}
     prefs = {}
+
+    def _normalize_indices(value):
+        """Accept int/list/tuple/set/str and normalize to a flat list[int]."""
+        if value is None:
+            return []
+        if isinstance(value, (int, np.integer)):
+            return [int(value)]
+        if isinstance(value, str):
+            parts = [p.strip() for p in value.replace(";", ",").split(",")]
+            out = []
+            for p in parts:
+                if p == "":
+                    continue
+                try:
+                    out.append(int(p))
+                except Exception:
+                    continue
+            return out
+        if isinstance(value, (list, tuple, set)):
+            out = []
+            for x in value:
+                if isinstance(x, (int, np.integer)):
+                    out.append(int(x))
+                else:
+                    try:
+                        out.append(int(x))
+                    except Exception:
+                        continue
+            return out
+        try:
+            return [int(value)]
+        except Exception:
+            return []
     schema = {
         "description": "Identify win/lose word indices for a topic",
         "parameters": {
@@ -228,8 +265,10 @@ def _build_preferences(
             res["k"] = k
 
         allowed = {d[list(d.keys())[0]] for d in top15_kv + other_kv}
-        w_win = [int(i) for i in res["w_win_indices"] if int(i) in allowed]
-        w_loose = [int(i) for i in res["w_loose_indices"] if int(i) in allowed]
+        w_win_raw = _normalize_indices(res.get("w_win_indices", []))
+        w_loose_raw = _normalize_indices(res.get("w_loose_indices", []))
+        w_win = [int(i) for i in w_win_raw if int(i) in allowed]
+        w_loose = [int(i) for i in w_loose_raw if int(i) in allowed]
         prefs[k] = {"w_win": w_win, "w_loose": w_loose}
 
     return prefs
@@ -292,7 +331,8 @@ def build_preference_pipeline(
             for x in read_jsonl(extra_path)
         }
     elif not only_preferences:
-        vocab_emb_cache = os.path.join(run_dir, f"vocab_embeddings_{plm_model}.npy")
+        model_key = _safe_name(plm_model)
+        vocab_emb_cache = os.path.join(run_dir, f"vocab_embeddings_{model_key}.npy")
         vocab_emb = _embed_vocab(vocab, plm_model, device, vocab_emb_cache)
         extra_words = _select_extra_words(vocab, vocab_emb, descriptions, top_words_25, plm_model, device)
         write_jsonl(
