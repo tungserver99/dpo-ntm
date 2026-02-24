@@ -11,7 +11,7 @@ for %%D in (%DATASETS%) do (
     if /I "%%D"=="20NG" if "%%T"=="50" set "SKIP=1"
 
     if "!SKIP!"=="1" (
-      echo [SKIP] dataset=%%D num_topics=%%T (already run)
+      echo [SKIP] dataset=%%D num_topics=%%T - already run
     ) else (
       echo [RUN] dataset=%%D num_topics=%%T
       python main.py ^
