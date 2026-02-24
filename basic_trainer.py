@@ -329,6 +329,13 @@ class BasicTrainer:
             for k, cv in enumerate(cv_list):
                 if cv < cv_mean:
                     use_topics.add(k)
+        if self.dpo_topic_filter == "cv_wikipedia_below_avg":
+            from evaluations.topic_coherence import TC_on_wikipedia_llm_itl
+            top15_path = os.path.join(self.update_dir, "top_words_15.txt")
+            tc_scores, tc_mean = TC_on_wikipedia_llm_itl(top15_path, tc_metric="C_V")
+            for k, tc in enumerate(tc_scores):
+                if tc < tc_mean:
+                    use_topics.add(k)
         if self.dpo_topic_filter in ["llm_score_1_2", "either"]:
             scores = pipeline.get("scores", {})
             for k, s in scores.items():

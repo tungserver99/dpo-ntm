@@ -39,7 +39,7 @@ training normally -> build preference dataset (LLM + embeddings) -> DPO fine-tun
 - `--dpo_start_epoch` : epoch E to snapshot and start preference building
 - `--dpo_weight` : weight for DPO loss
 - `--dpo_alpha` : temperature for DPO loss
-- `--dpo_topic_filter` : `cv_below_avg` (default) | `llm_score_1_2` | `either` | `none`
+- `--dpo_topic_filter` : `cv_below_avg` (default) | `cv_wikipedia_below_avg` | `llm_score_1_2` | `either` | `none`
 - `--dpo_llm_model` : LLM model (default `gpt-4o`)
 - `--dpo_only_preferences` : skip preference building; use existing DPO artifacts
 - `--dpo_run_dir` : run directory containing DPO artifacts to reuse

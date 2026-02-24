@@ -12,6 +12,16 @@ RESULT_DIR = "results"
 DATA_DIR = "datasets"
 
 
+def _load_dotenv_if_available():
+    try:
+        from dotenv import load_dotenv
+    except Exception:
+        return
+    env_path = os.path.join(os.getcwd(), ".env")
+    if os.path.isfile(env_path):
+        load_dotenv(env_path)
+
+
 if __name__ == "__main__":
     parser = config.new_parser()
     config.add_dataset_argument(parser)
@@ -44,6 +54,29 @@ if __name__ == "__main__":
     seed.seedEverything(args.seed)
     print(args)
     logger = log.setup_logger("main", os.path.join(current_run_dir, "main.log"))
+
+    wandb_run = None
+    try:
+        _load_dotenv_if_available()
+        import wandb
+        wandb_key = os.getenv("WANDB_API_KEY", "").strip()
+        if wandb_key:
+            wandb.login(key=wandb_key)
+            run_name = (
+                f"{args.model}-{args.dataset}-k{args.num_topics}-"
+                f"{args.weight_ECR}-{args.epochs}-{current_time}"
+            )
+            wandb_run = wandb.init(
+                project=args.wandb_prj,
+                name=run_name,
+                config=vars(args),
+                dir=current_run_dir,
+            )
+            logger.info("WandB initialized.")
+        else:
+            logger.info("WANDB_API_KEY not found in env/.env. Skip WandB logging.")
+    except Exception as exc:
+        logger.info(f"WandB initialization failed: {exc}")
 
     read_labels = True
     dataset = datasethandler.BasicDatasetHandler(
@@ -133,17 +166,22 @@ if __name__ == "__main__":
             snapshot = torch.load(base_snapshot_path, map_location="cpu", weights_only=False)
             trainer.model.load_state_dict(snapshot["model_state_dict"])
             base_train_theta, base_test_theta = trainer.save_theta(dataset, base_content_dir)
-            evaluate(
+            base_metrics = evaluate(
                 args, trainer, dataset, base_train_theta, base_test_theta,
                 base_content_dir, logger, read_labels=True, eval_tag="BASE"
             )
+            if wandb_run is not None:
+                wandb.log({f"BASE/{k}": v for k, v in base_metrics.items()})
         else:
             logger.info(f"Base snapshot not found: {base_snapshot_path}")
         trainer.model.load_state_dict(final_state)
 
     train_theta, test_theta = trainer.save_theta(dataset, current_run_dir)
     final_tag = "UPDATED" if use_update else "BASE"
-    evaluate(
+    final_metrics = evaluate(
         args, trainer, dataset, train_theta, test_theta,
         current_run_dir, logger, read_labels=True, eval_tag=final_tag
     )
+    if wandb_run is not None:
+        wandb.log({f"{final_tag}/{k}": v for k, v in final_metrics.items()})
+        wandb.finish()

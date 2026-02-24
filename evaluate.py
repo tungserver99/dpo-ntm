@@ -3,6 +3,7 @@ import numpy as np
 import evaluations
 
 def evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, logger, wandb = None, read_labels=True, eval_tag=None):
+    metrics = {}
     if eval_tag:
         print(f"[EVAL] {eval_tag}")
         logger.info(f"[EVAL] {eval_tag}")
@@ -54,6 +55,7 @@ def evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, l
     print(f"TD_15: {TD_15:.5f}")
     # wandb.log({"TD_15": TD_15})
     logger.info(f"TD_15: {TD_15:.5f}")
+    metrics["TD_15"] = float(TD_15)
     
     # IRBO
     # IRBO_15 = evaluations.buubyyboo_dth([top_words.split() for top_words in top_words_15], topk=15)
@@ -89,6 +91,11 @@ def evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, l
         logger.info(f"InversePurity: {clustering_results['InversePurity']}")
         logger.info(f"HarmonicPurity: {clustering_results['HarmonicPurity']}")
         logger.info(f"ARI: {clustering_results['ARI']}")
+        metrics["NMI"] = float(clustering_results["NMI"])
+        metrics["Purity"] = float(clustering_results["Purity"])
+        metrics["InversePurity"] = float(clustering_results["InversePurity"])
+        metrics["HarmonicPurity"] = float(clustering_results["HarmonicPurity"])
+        metrics["ARI"] = float(clustering_results["ARI"])
 
     # evaluate classification
     if read_labels:
@@ -100,6 +107,8 @@ def evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, l
         print(f"Macro-f1", classification_results['macro-F1'])
         # wandb.log({"Macro-f1": classification_results['macro-F1']})
         logger.info(f"Macro-f1: {classification_results['macro-F1']}")
+        metrics["Accuracy"] = float(classification_results["acc"])
+        metrics["Macro-f1"] = float(classification_results["macro-F1"])
 
     # TC on train texts
     TC_train_list, TC_train = evaluations.compute_topic_coherence(
@@ -108,6 +117,7 @@ def evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, l
     # wandb.log({"TC_train": TC_train})
     logger.info(f"TC_train: {TC_train:.5f}")
     logger.info(f'TC_train list: {TC_train_list}')
+    metrics["TC_train"] = float(TC_train)
 
     # LLM eval
     if getattr(args, "enable_llm_eval", True):
@@ -117,6 +127,7 @@ def evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, l
         print(f"LLM_eval_mean: {llm_mean:.5f}")
         logger.info(f"LLM_eval_mean: {llm_mean:.5f}")
         logger.info(f"LLM_eval_scores: {llm_scores}")
+        metrics["LLM_eval_mean"] = float(llm_mean)
 
     try:
         tc_wiki_scores, tc_wiki_mean = evaluations.topic_coherence.TC_on_wikipedia_llm_itl(
@@ -126,8 +137,10 @@ def evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, l
         print(f"TC_wikipedia_llm_itl: {tc_wiki_mean:.5f}")
         logger.info(f"TC_wikipedia_llm_itl: {tc_wiki_mean:.5f}")
         logger.info(f"TC_wikipedia_llm_itl_scores: {tc_wiki_scores}")
+        metrics["TC_wikipedia_llm_itl"] = float(tc_wiki_mean)
     except Exception as exc:
         print(f"TC_wikipedia_llm_itl failed: {exc}")
         logger.info(f"TC_wikipedia_llm_itl failed: {exc}")
 
     # wandb.finish()
+    return metrics
