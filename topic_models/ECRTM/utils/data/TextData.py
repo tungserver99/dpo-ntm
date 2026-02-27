@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 from scipy import io as sio
 from scipy import sparse
-import gensim.downloader as api
+from utils import load_dataset_word_embeddings
 
 
 class TextData:
@@ -38,10 +38,8 @@ class TextData:
         voc = data_dict['voc'].reshape(-1).tolist()
         voc = [v[0] for v in voc]
 
-        print('Loading word embeddings ...')
-        model_glove = api.load("glove-wiki-gigaword-50")
-        print('Loading done!')
-        word_embeddings = get_voc_embeddings(voc, model_glove)
+        print('Loading word embeddings from datasets/%s/word_embeddings.npy ...' % self.data_name)
+        word_embeddings = load_dataset_word_embeddings(self.data_name)
 
         train_labels = data_dict['label_train'].reshape(-1,).astype('int64')
         test_labels = data_dict['label_test'].reshape(-1,).astype('int64')
@@ -57,9 +55,3 @@ def sparse2dense(input_matrix):
     return input_matrix
 
 
-def get_voc_embeddings(voc, embedding_model):
-    word_embeddings = []
-    for v in voc:
-        word_embeddings.append(embedding_model[v])
-    word_embeddings = np.array(word_embeddings).astype('float32')
-    return word_embeddings

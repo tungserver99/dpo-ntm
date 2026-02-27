@@ -1,12 +1,10 @@
-import sys
-sys.path.append("../LLM-ITL")
 import numpy as np
 import torch
 from torch.optim.lr_scheduler import StepLR
 from collections import defaultdict
 from .models.ECRTM import ECRTM
 import os
-import gensim.downloader as api
+from utils import load_dataset_embedding_model
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from topic_models.refine_funcs import compute_refine_loss, save_llm_topics
 from  generate import generate_one_pass
@@ -48,7 +46,7 @@ class Runner:
         if self.args.llm_itl:
             # Load embedding model
             print('Loading embedding model and LLM ...')
-            embedding_model = api.load("glove-wiki-gigaword-50")
+            embedding_model = load_dataset_embedding_model(self.args.dataset)
 
             # load LLM
             llm = AutoModelForCausalLM.from_pretrained(self.args.llm,
@@ -58,6 +56,8 @@ class Runner:
             tokenizer = AutoTokenizer.from_pretrained(self.args.llm, padding_side='left')
             tokenizer.pad_token = tokenizer.eos_token
             print('Loading done!')
+
+        snapshot_epochs = self._get_snapshot_epochs(self.args.epochs, self.args.warmStep)
 
         for epoch in range(self.args.epochs):
             self.model.train()
@@ -107,8 +107,8 @@ class Runner:
 
             print(output_log)
 
-            # evaluation phase
-            if (epoch+1) % self.args.eval_step == 0:
+            # snapshot phase: only after base phase and final epoch
+            if (epoch + 1) in snapshot_epochs:
                 self.model.eval()
 
                 topic_dir = 'save_topics/%s' % self.run_name
@@ -141,6 +141,14 @@ class Runner:
 
         beta = self.model.get_beta().detach().cpu().numpy()
         return beta
+
+    @staticmethod
+    def _get_snapshot_epochs(epochs, warm_step):
+        points = [epochs]
+        if 1 <= warm_step <= epochs:
+            points.append(warm_step)
+        # keep order and deduplicate
+        return sorted(set(points))
 
 
     def test(self, input_data):

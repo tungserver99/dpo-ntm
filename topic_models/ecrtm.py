@@ -1,12 +1,9 @@
-import sys
-sys.path.append("../LLM-ITL")
 import numpy as np
 import yaml
 import argparse
 from topic_models.ECRTM.Runner import Runner
 from topic_models.ECRTM.utils.data.TextData import TextData
 import torch
-from topic_models.hyperparameters import hyperparamters
 
 
 def parse_args():
@@ -35,22 +32,14 @@ def parse_args():
     parser.add_argument('--inference_bs', type=int, default=5)
     parser.add_argument('--max_new_tokens', type=int, default=300)
 
-    parser.add_argument('--lr_scheduler', type=bool, default=False)
+    parser.add_argument('--lr_scheduler', type=bool, default=True)
     parser.add_argument('--lr_step_size', type=int, default=125)
     parser.add_argument('--dropout', type=float, default=0)
     parser.add_argument('--en1_units', type=int, default=200)
     parser.add_argument('--beta_temp', type=float, default=0.2)
-    parser.add_argument('--num_top_word', type=int, default=10)
+    parser.add_argument('--num_top_word', type=int, default=15)
     args = parser.parse_args()
-
-    # load hyper-parameters for topic model
-    hps = hyperparamters[args.name + '_' + args.dataset]
-    args.epochs = hps[0]
-    args.lr = hps[1]
-    args.batch_size = hps[2]
-    args.weight_loss_ECR = hps[3]
-
-    args.warmStep = args.epochs - args.llm_step # Leave X epochs for LLM refinement
+    args.warmStep = max(0, args.epochs - args.llm_step) # Leave llm_step epochs for LLM refinement
 
     return args
 
