@@ -21,7 +21,7 @@ for %%D in (%DATASETS%) do (
         --dropout 0.2 ^
         --weight_ECR 120.0 ^
         --use_pretrainWE ^
-        --wandb_prj ECRTM_TM ^
+        --wandb_prj ntm-dpo-con ^
         --epochs 500 ^
         --batch_size 200 ^
         --lr 0.002 ^
