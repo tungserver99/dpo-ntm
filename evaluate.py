@@ -73,7 +73,7 @@ def evaluate(args, trainer, dataset, train_theta, test_theta, current_run_dir, l
     # LLM eval
     if getattr(args, "enable_llm_eval", True):
         llm_scores, llm_mean = evaluations.llm_eval(
-            top_words_15, llm_model=args.update_llm_model, out_dir=current_run_dir, resume=True
+            top_words_15, llm_model=args.update_llm_model, out_dir=current_run_dir, resume=False
         )
         print(f"LLM_eval_mean: {llm_mean:.5f}")
         logger.info(f"LLM_eval_mean: {llm_mean:.5f}")

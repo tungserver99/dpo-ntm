@@ -4,7 +4,7 @@ from dpo.jsonl_io import read_jsonl, write_jsonl
 from dpo.llm_client import LLMClient
 
 
-def llm_eval(top_words_15, llm_model="gpt-4o", out_dir=None, resume=True):
+def llm_eval(top_words_15, llm_model="gpt-4o", out_dir=None, resume=False):
     if out_dir is None:
         raise ValueError("out_dir is required for llm_eval.")
 
