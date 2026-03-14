@@ -216,9 +216,9 @@ def _build_preferences(
             "properties": {
                 "k": {"type": "integer"},
                 "w_win_indices": {"type": "array", "items": {"type": "integer"}},
-                "w_lose_indices": {"type": "array", "items": {"type": "integer"}},
+                "w_loose_indices": {"type": "array", "items": {"type": "integer"}},
             },
-            "required": ["k", "w_win_indices", "w_lose_indices"],
+            "required": ["k", "w_win_indices", "w_loose_indices"],
         },
     }
     system = "You are a topic preference labeling assistant."
