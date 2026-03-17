@@ -111,9 +111,9 @@ def main():
             "properties": {
                 "k": {"type": "integer"},
                 "w_win_indices": {"type": "array", "items": {"type": "integer"}},
-                "w_loose_indices": {"type": "array", "items": {"type": "integer"}},
+                "w_lose_indices": {"type": "array", "items": {"type": "integer"}},
             },
-            "required": ["k", "w_win_indices", "w_loose_indices"],
+            "required": ["k", "w_win_indices", "w_lose_indices"],
         },
     }
     user = _build_prompt(vocab, top_words_15, top_words_25, extra_words, descriptions, k)
@@ -170,3 +170,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

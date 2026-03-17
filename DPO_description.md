@@ -27,7 +27,7 @@ For **top-10, top-15, top-20, and top-25**, save a separate JSONL file in the sa
   - Next, use **sentence embeddings** to select **5 additional words** (outside the top 25) from the vocabulary that are most semantically similar to the topic description (embed the topic description, embed all words in the vocabulary, then compute similarity).
   - From the resulting **30 words** (the original top 25 plus 5 additional words), instruct the LLM to identify:
     - **win words**: semantically closest to the topic
-    - **loose words**: semantically unrelated to the topic
+    - **lose words**: semantically unrelated to the topic
   - To do this, provide the LLM with:
     - The topic index
     - The topic description phrase
@@ -40,9 +40,9 @@ For **top-10, top-15, top-20, and top-25**, save a separate JSONL file in the sa
 
       - A list of **15 words outside the top 15**, consisting of words ranked 11–25 plus the 5 embedding-selected words, using the same key–value format.
       - Here, **keys** are words and **values** are vocabulary indices starting from 0.
-  - Then, prompt the LLM to identify **win–loose pairs**, with the following rules:
-    - The number of win and loose words can vary by topic; the LLM does not need to be overly strict.
-    - Any **bad words within the top 15** must be included in the **loose** list.
+  - Then, prompt the LLM to identify **win–lose pairs**, with the following rules:
+    - The number of win and lose words can vary by topic; the LLM does not need to be overly strict.
+    - Any **bad words within the top 15** must be included in the **lose** list.
     - Any **good words outside the top 15** must be included in the **win** list.
   - Prompt the LLM to return the **preference dataset** in the following format:
 
@@ -50,7 +50,7 @@ For **top-10, top-15, top-20, and top-25**, save a separate JSONL file in the sa
 {
   "k": <topic_index>,
   "w_win_indices": [<indices of words related to the main topic>],
-  "w_loose_indices": [<indices of words not related to the main topic>]
+  "w_lose_indices": [<indices of words not related to the main topic>]
 }
 ```
 
@@ -62,3 +62,4 @@ For **top-10, top-15, top-20, and top-25**, save a separate JSONL file in the sa
 - For the LLM, please use **gpt-4o**. The **OPENAI_API_KEY** is stored in the `.env` file.
   - Use **function calling** to ensure the LLM outputs strictly follow the required format.
 - Use ECRTM as the base model. Do not change the base model too much. I think all new things can be added in new code files.
+

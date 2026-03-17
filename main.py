@@ -7,6 +7,8 @@ import scipy
 from evaluate import evaluate
 import torch
 import copy
+from time import perf_counter
+from utils import timing
 
 RESULT_DIR = "results"
 DATA_DIR = "datasets"
@@ -155,7 +157,9 @@ if __name__ == "__main__":
         trainer.set_resume_state(snapshot)
         logger.info(f"[UPDATE] Resuming from snapshot epoch {snapshot_epoch}: {snapshot_path}")
 
+    train_start_time = perf_counter()
     trainer.train(dataset)
+    timing.log_training_duration(logger, train_start_time, perf_counter())
 
     if use_update and base_content_dir and not args.update_only:
         final_state = copy.deepcopy(trainer.model.state_dict())

@@ -1,31 +1,18 @@
-# Code for NeuroMax: Enhancing Neural Topic Modeling via Maximizing Mutual Information and Group Topic Regularization (EMNLP 2024 Findings)
-
-[Paper link](https://arxiv.org/abs/2409.19749)
+# Code for LLMFeed
 
 ## Preparing libraries
 1. Install the following libraries
     ```
-    numpy 1.26.4
-    torch_kmeans 0.2.0
-    pytorch 2.2.0
-    sentence_transformers 2.2.2
-    scipy 1.10
-    bertopic 0.16.0
-    gensim 4.2.0
+    numpy 
+    pytorch 
+    sentence_transformers
+    scipy 
+    gensim
+    wandb
+    openai
     ```
 2. Install java
-3. Download [this java jar](https://hobbitdata.informatik.uni-leipzig.de/homes/mroeder/palmetto/palmetto-0.1.0-jar-with-dependencies.jar) to ./evaluations/pametto.jar for evaluating
-4. Download and extract [this processed Wikipedia corpus](https://hobbitdata.informatik.uni-leipzig.de/homes/mroeder/palmetto/Wikipedia_bd.zip) to ./datasets/wikipedia/ as an external reference corpus.
-
-## Usage
-To run and evaluate our model for YahooAnswers dataset, run this example:
-
-> python main.py --use_pretrainWE
-
-## DPO End-to-End Training (ECRTM)
-
-This repo supports LLM-guided preference learning (DPO) for **ECRTM** in a single run:
-training normally -> build preference dataset (LLM + embeddings) -> DPO fine-tuning.
+3. Download and extract [this processed Wikipedia corpus](https://hobbitdata.informatik.uni-leipzig.de/homes/mroeder/palmetto/Wikipedia_bd.zip) to ./datasets/wikipedia/ as an external reference corpus.
 
 ### Prerequisites
 
@@ -33,18 +20,9 @@ training normally -> build preference dataset (LLM + embeddings) -> DPO fine-tun
 - `sentence-transformers` available (used to embed vocab/description)
 - `openai` Python SDK available (used for LLM function calling)
 
-### Key Arguments
+## Basic training
 
-- `--enable_dpo` : enable DPO pipeline
-- `--dpo_start_epoch` : epoch E to snapshot and start preference building
-- `--dpo_weight` : weight for DPO loss
-- `--dpo_alpha` : temperature for DPO loss
-- `--dpo_topic_filter` : `cv_below_avg` (default) | `cv_wikipedia_below_avg` | `llm_score_1_2` | `either` | `none`
-- `--dpo_llm_model` : LLM model (default `gpt-4o`)
-- `--dpo_only_preferences` : skip preference building; use existing DPO artifacts
-- `--dpo_run_dir` : run directory containing DPO artifacts to reuse
-
-### Example (End-to-End)
+Example:
 
 ```bash
 python main.py \
@@ -52,84 +30,185 @@ python main.py \
   --dataset 20NG \
   --num_topics 50 \
   --epochs 500 \
-  --weight_ECR 200 \
-  --use_pretrainWE \
-  --enable_dpo \
-  --enable_llm_eval \
-  --dpo_start_epoch 400 \
-  --dpo_weight 10.0 \
-  --dpo_alpha 1.0 \
-  --dpo_topic_filter cv_below_avg \
-  --dpo_llm_model gpt-4o
+  --weight_ECR 120 \
+  --use_pretrainWE
 ```
 
-### What Gets Saved (per run directory)
+Important CLI arguments are defined in [utils/config.py]:
+- `--dataset`
+- `--model` with current choice `ECRTM`
+- `--num_topics`
+- `--dropout`
+- `--weight_ECR`
+- `--use_pretrainWE`
+- `--train_WE`
+- `--epochs`
+- `--batch_size`
+- `--lr`
+- `--device`
+- `--lr_scheduler`
+- `--lr_step_size`
+- `--freeze_we_epoch`
+- `--enable_llm_eval`
+- `--tune_SVM`
 
-- `top_words_10/15/20/25.txt`
-- `preferences.jsonl`
-- `beta_ref_logits.npy`
-- `dpo_snapshot_epoch_E.pth`
-- `dpo_selected_topics.jsonl`
+## Update phase: DPO + contrastive refinement
 
-### Notes
+The current update pipeline is controlled by these flags:
+- `--enable_update`
+- `--update_start_epoch`
+- `--update_only`
+- `--update_dir`
+- `--update_llm_model`
+- `--dpo_topic_filter`
+- `--dpo_weight`
+- `--dpo_alpha`
+- `--contrastive_weight`
+- `--contrastive_ramp_epochs`
+- `--contrastive_topk`
+- `--contrastive_temperature`
+- `--contrastive_queue_size`
+- `--contrastive_doc_encoder`
+- `--contrastive_loss_type`
+- `--doc_embedding_source`
+- `--force_rebuild_doc_embeddings`
 
-- DPO uses **beta logits** (pre-softmax) and a **frozen reference** at epoch E.
-- If you rerun, the pipeline reuses existing JSONL artifacts to save cost.
+### End-to-end update run
 
-### Reuse Existing Preferences (Only DPO Training)
-
-If you want to **skip preference building** and only train with DPO loss, make sure these files exist in `--dpo_run_dir`:
-- `preferences.jsonl`
-- `top_words_15.txt`
-- `beta_ref_logits.npy`
-- `dpo_snapshot_epoch_E.pth` (E must match `--dpo_start_epoch`)
-
-Then run with:
+Example:
 
 ```bash
 python main.py \
   --model ECRTM \
   --dataset 20NG \
   --num_topics 50 \
-  --weight_ECR 200 \
+  --epochs 500 \
+  --weight_ECR 120 \
   --use_pretrainWE \
-  --enable_dpo \
-  --dpo_start_epoch 350 \
-  --dpo_weight 20.0 \
-  --dpo_alpha 1.0 \
+  --enable_update \
+  --update_start_epoch 350 \
+  --update_llm_model gpt-4o \
   --dpo_topic_filter cv_below_avg \
-  --dpo_llm_model gpt-4o \
-  --dpo_only_preferences \
-  --dpo_run_dir <path_to_previous_run_dir>
+  --dpo_weight 30.0 \
+  --dpo_alpha 1.0 \
+  --contrastive_weight 20.0 \
+  --contrastive_ramp_epochs 0 \
+  --contrastive_topk 2 \
+  --contrastive_temperature 0.5 \
+  --contrastive_queue_size 0 \
+  --contrastive_doc_encoder BAAI/bge-small-en-v1.5 \
+  --contrastive_loss_type supcon \
+  --doc_embedding_source rebuild_from_text \
+  --enable_llm_eval
 ```
 
-### Build Preferences Only (Standalone)
+What happens during the update phase:
+- the trainer saves a snapshot at `update_start_epoch`
+- top words for 10, 15, 20, and 25 terms are exported
+- topic descriptions and preference data are built with the LLM
+- DPO preferences are filtered by the selected topic filter
+- document-topic pseudo labels are prepared for contrastive training
+- training resumes from the snapshot and continues until `--epochs`
 
-If you want to **build preferences in a specific run directory** without training:
+### Reuse existing update artifacts
+
+If you already have update artifacts in a previous run, you can resume only the update stage:
+
+```bash
+python main.py \
+  --model ECRTM \
+  --dataset 20NG \
+  --num_topics 50 \
+  --epochs 500 \
+  --weight_ECR 120 \
+  --use_pretrainWE \
+  --enable_update \
+  --update_only \
+  --update_start_epoch 350 \
+  --update_dir results/ECRTM/20NG/50/<previous_run>/base_content \
+  --update_llm_model gpt-4o \
+  --dpo_topic_filter none \
+  --dpo_weight 30.0 \
+  --dpo_alpha 1.0
+```
+
+For `--update_only`, the current code expects at least:
+- `preferences.jsonl`
+- `top_words_15.txt`
+- `beta_ref_logits.npy`
+- `update_snapshot_epoch_<E>.pth`
+
+Optional files that will also be reused if present:
+- `topic_scores.jsonl`
+- `topic_descriptions.jsonl`
+
+## Standalone preference building
+
+You can build the preference artifacts for an existing run directory without rerunning training:
 
 ```bash
 python dpo_build.py \
-  --run_dir <path_to_existing_run_dir> \
+  --run_dir results/ECRTM/20NG/50/<run_dir>/base_content \
   --dataset 20NG \
-  --plm_model all-mpnet-base-v2 \
-  --llm_model gpt-4o
+  --plm_model BAAI/bge-small-en-v1.5 \
+  --llm_model gpt-4o \
+  --device cuda
 ```
+
+This entrypoint is implemented in [dpo_build.py].
+
+## Run outputs
+
+A normal run directory contains files such as:
+- `config.txt`
+- `main.log`
+- `beta.npy`
+- `train_theta.npy`
+- `test_theta.npy`
+- `train_argmax_theta.npy`
+- `test_argmax_theta.npy`
+- `top_words_10.txt`
+- `top_words_15.txt`
+- `top_words_20.txt`
+- `top_words_25.txt`
+- `checkpoints/checkpoint_epoch_<n>.pth`
+
+When `--enable_update` is active, the run also creates a `base_content/` directory that stores update artifacts such as:
+- `update_snapshot_epoch_<E>.pth`
+- `beta_ref_logits.npy`
+- `preferences.jsonl`
+- `topic_scores.jsonl`
+- `topic_descriptions.jsonl`
+- `extra_words.jsonl`
+- `top_words_10.jsonl`
+- `top_words_15.jsonl`
+- `top_words_20.jsonl`
+- `top_words_25.jsonl`
+- `update_selected_topics.jsonl`
+
+The final run directory still receives the end-of-training outputs and final evaluation logs.
+
+## Evaluation
+
+[evaluate.py] currently computes:
+- topic diversity on top-15 words
+- clustering metrics: `NMI`, `Purity`, `InversePurity`, `HarmonicPurity`, `ARI`
+- classification metrics: `Accuracy`, `Macro-f1`
+- optional LLM topic evaluation
+- Wikipedia-based `C_V` and `NPMI` using Palmetto when available
+
+For Wikipedia-based coherence, the code expects:
+- Java available on PATH
+- `evaluations/palmetto-0.1.5-exec.jar`
+- `datasets/wikipedia/wikipedia_bd`
+
+The repository already includes Palmetto jars under `evaluations/`, but the external Wikipedia index still needs to exist if you want those metrics.
+
+## Notes
+
+- `ECRTM` is the only model exposed by the current CLI.
+- The LLM model defaults to `gpt-4o` in the current code.
 
 ## Acknowledgement
 Some part of this implementation is based on [TopMost](https://github.com/BobXWu/TopMost). We also utilizes [Palmetto](https://github.com/dice-group/Palmetto) for the evaluation of topic coherence.
 
-## Citation
-
-If you want to reuse our code, please cite us as:
-
-```
-@misc{pham2024neuromax,
-      title={NeuroMax: Enhancing Neural Topic Modeling via Maximizing Mutual Information and Group Topic Regularization}, 
-      author={Duy-Tung Pham and Thien Trang Nguyen Vu and Tung Nguyen and Linh Ngo Van and Duc Anh Nguyen and Thien Huu Nguyen},
-      year={2024},
-      eprint={2409.19749},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL},
-      url={https://arxiv.org/abs/2409.19749}, 
-}
-```

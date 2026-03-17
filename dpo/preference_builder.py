@@ -166,6 +166,18 @@ def _select_extra_words(
     return extra
 
 
+def _parse_preference_entry(entry):
+    k = int(entry["k"])
+    if "w_win_indices" in entry and "w_lose_indices" in entry:
+        return k, {"w_win": entry["w_win_indices"], "w_lose": entry["w_lose_indices"]}
+    if "w_win_indices" in entry and "w_loose_indices" in entry:
+        return k, {"w_win": entry["w_win_indices"], "w_lose": entry["w_loose_indices"]}
+    return k, {
+        "w_win": entry.get("w_plus_indices", []),
+        "w_lose": entry.get("w_minus_indices", []),
+    }
+
+
 def _build_preferences(
     llm: LLMClient,
     vocab: List[str],
@@ -216,9 +228,9 @@ def _build_preferences(
             "properties": {
                 "k": {"type": "integer"},
                 "w_win_indices": {"type": "array", "items": {"type": "integer"}},
-                "w_loose_indices": {"type": "array", "items": {"type": "integer"}},
+                "w_lose_indices": {"type": "array", "items": {"type": "integer"}},
             },
-            "required": ["k", "w_win_indices", "w_loose_indices"],
+            "required": ["k", "w_win_indices", "w_lose_indices"],
         },
     }
     system = "You are a topic preference labeling assistant."
@@ -226,8 +238,8 @@ def _build_preferences(
     for k in tqdm(range(len(top_words_15)), desc="DPO building preferences"):
         top15 = top_words_15[k]
         top25 = top_words_25[k]
-        # words ranked 11-25 (15 words) + 5 extra
-        other_words = top25[10:25]
+        # words ranked 16-25 (10 words) + 5 extra
+        other_words = top25[15:25]
         extra_idx = extra_words.get(k, [])
         extra_words_list = [vocab[i] for i in extra_idx]
         other_words = other_words + extra_words_list
@@ -258,7 +270,7 @@ def _build_preferences(
             f"Topic index: {k}\n"
             f"Topic description: {descriptions.get(k, '')}\n"
             f"Top-15 words: {top15_kv}\n"
-            f"Other words (rank 11-25 + extra): {other_kv}"
+            f"Other words (rank 16-25 + extra): {other_kv}"
         )
         res = llm.call_function(system, user, "build_preferences", schema)
         if int(res["k"]) != k:
@@ -266,10 +278,10 @@ def _build_preferences(
 
         allowed = {d[list(d.keys())[0]] for d in top15_kv + other_kv}
         w_win_raw = _normalize_indices(res.get("w_win_indices", []))
-        w_loose_raw = _normalize_indices(res.get("w_loose_indices", []))
+        w_lose_raw = _normalize_indices(res.get("w_lose_indices", res.get("w_loose_indices", [])))
         w_win = [int(i) for i in w_win_raw if int(i) in allowed]
-        w_loose = [int(i) for i in w_loose_raw if int(i) in allowed]
-        prefs[k] = {"w_win": w_win, "w_loose": w_loose}
+        w_lose = [int(i) for i in w_lose_raw if int(i) in allowed]
+        prefs[k] = {"w_win": w_win, "w_lose": w_lose}
 
     return prefs
 
@@ -351,20 +363,14 @@ def build_preference_pipeline(
         prefs_list = read_jsonl(prefs_path)
         prefs = {}
         for x in prefs_list:
-            k = int(x["k"])
-            if "w_win_indices" in x and "w_loose_indices" in x:
-                prefs[k] = {"w_win": x["w_win_indices"], "w_loose": x["w_loose_indices"]}
-            else:
-                prefs[k] = {
-                    "w_win": x.get("w_plus_indices", []),
-                    "w_loose": x.get("w_minus_indices", []),
-                }
+            k, pref = _parse_preference_entry(x)
+            prefs[k] = pref
     else:
         prefs = _build_preferences(llm, vocab, top_words_15, top_words_25, extra_words, descriptions)
         write_jsonl(
             prefs_path,
             [
-                {"k": k, "w_win_indices": v["w_win"], "w_loose_indices": v["w_loose"]}
+                {"k": k, "w_win_indices": v["w_win"], "w_lose_indices": v["w_lose"]}
                 for k, v in prefs.items()
             ],
         )

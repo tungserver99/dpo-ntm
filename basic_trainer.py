@@ -8,8 +8,9 @@ from utils import static_utils
 import logging
 import os
 import scipy
-from time import time
+from time import perf_counter, time
 import json
+from utils import timing
 
 
 class BasicTrainer:
@@ -94,6 +95,10 @@ class BasicTrainer:
         return top_words, train_theta
 
     def train(self, dataset_handler, verbose=False):
+        train_start_time = perf_counter()
+        baseline_start_time = train_start_time
+        baseline_logged = False
+        update_start_time = None
         optimizer = self.make_optimizer()
 
         if self.lr_scheduler:
@@ -131,7 +136,13 @@ class BasicTrainer:
                     random.setstate(rng_state["python"])
 
         if self.enable_update and not self._update_ready and self.start_epoch >= self.update_start_epoch:
+            llm_phase_start = perf_counter()
             self._prepare_update(dataset_handler, self.update_start_epoch, optimizer)
+            timing.log_duration(self.logger, "llm_phase", perf_counter() - llm_phase_start)
+            if self.update_only:
+                timing.log_skipped_duration(self.logger, "baseline_phase", "update_only")
+                baseline_logged = True
+            update_start_time = perf_counter()
 
         data_size = len(dataset_handler.train_dataloader.dataset)
 
@@ -207,7 +218,25 @@ class BasicTrainer:
                 self.save_checkpoint(epoch, optimizer)
 
             if self.enable_update and not self._update_ready and epoch == self.update_start_epoch:
+                timing.log_duration(self.logger, "baseline_phase", perf_counter() - baseline_start_time)
+                baseline_logged = True
+                llm_phase_start = perf_counter()
                 self._prepare_update(dataset_handler, epoch, optimizer)
+                timing.log_duration(self.logger, "llm_phase", perf_counter() - llm_phase_start)
+                update_start_time = perf_counter()
+
+        if not self.enable_update:
+            timing.log_duration(self.logger, "baseline_phase", perf_counter() - baseline_start_time)
+            return
+
+        if not baseline_logged:
+            timing.log_duration(self.logger, "baseline_phase", perf_counter() - baseline_start_time)
+
+        if update_start_time is None:
+            timing.log_skipped_duration(self.logger, "update_phase", "not_started")
+            return
+
+        timing.log_duration(self.logger, "update_phase", perf_counter() - update_start_time)
 
     def save_checkpoint(self, epoch, optimizer):
         checkpoint = {
@@ -248,6 +277,7 @@ class BasicTrainer:
             return lines
 
         from dpo.jsonl_io import read_jsonl
+        from dpo.preference_builder import _parse_preference_entry
 
         if self.update_only:
             prefs_path = os.path.join(self.update_dir, "preferences.jsonl")
@@ -265,14 +295,8 @@ class BasicTrainer:
             prefs_list = read_jsonl(prefs_path)
             prefs = {}
             for x in prefs_list:
-                k = int(x["k"])
-                if "w_win_indices" in x and "w_loose_indices" in x:
-                    prefs[k] = {"w_win": x["w_win_indices"], "w_loose": x["w_loose_indices"]}
-                else:
-                    prefs[k] = {
-                        "w_win": x.get("w_plus_indices", []),
-                        "w_loose": x.get("w_minus_indices", []),
-                    }
+                k, pref = _parse_preference_entry(x)
+                prefs[k] = pref
             scores_path = os.path.join(self.update_dir, "topic_scores.jsonl")
             desc_path = os.path.join(self.update_dir, "topic_descriptions.jsonl")
             scores = {int(x["k"]): int(x["llm_score"]) for x in read_jsonl(scores_path)} if os.path.isfile(scores_path) else {}
@@ -530,3 +554,5 @@ class BasicTrainer:
             np.save(os.path.join(dir_path, "group_dist.npy"), group_dist)
 
         return word_embeddings, topic_embeddings
+
+
